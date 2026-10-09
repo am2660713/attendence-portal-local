@@ -1,0 +1,47 @@
+# Attendance App Deployment Guide
+
+## 1) Deploy Backend + PostgreSQL on Render
+
+1. Push this project to GitHub.
+2. In Render, create a **Blueprint** using `render.yaml` from repo root.
+3. After creation, open backend service env vars and set:
+   - `PGHOST` = your Render Postgres host
+   - `PGUSER` = your Render Postgres user
+   - `PGPASSWORD` = your Render Postgres password
+   - `PGDATABASE` = `attendance_app`
+   - `PGPORT` = `5432`
+   - `ALLOWED_ORIGINS` = your Vercel domain (example: `https://attendance-frontend.vercel.app`)
+   - `OFFICE_ALLOWED_IPS` = optional fallback office public IP address (example: `203.0.113.10`)
+   - `RESEND_API_KEY` = Resend email API key for monthly HR reports
+   - `REPORT_FROM_EMAIL` = verified sender email in Resend
+   - `REPORT_TO_EMAILS` = fallback HR/Admin emails, comma-separated
+4. Open Render backend shell and run:
+   - `npm run seed`
+
+## 2) Deploy Frontend on Vercel
+
+1. Import repo in Vercel.
+2. Set **Root Directory** to `frontend`.
+3. Deploy once.
+4. In deployed frontend, update `frontend/public/config.js` API base:
+   - `API_BASE: "https://<your-render-backend>.onrender.com/api"`
+5. Redeploy frontend.
+
+## 3) Final Check
+
+1. Open Vercel URL on mobile.
+2. Login with sample IDs: `EMP001`, `EMP002`, `EMP003`.
+3. Allow location permission.
+4. Test check-in and check-out.
+
+## Notes
+
+- Geofence coordinates and monthly report emails are stored in PostgreSQL `admin_settings`.
+- On backend CORS, use exact Vercel URL in `ALLOWED_ORIGINS`.
+- For multiple domains, use comma-separated values in `ALLOWED_ORIGINS`.
+- Admin can change allowed office public IPs from **Admin -> Employee Tools -> Office Location**.
+- For multiple office internet connections, enter one IP per line or comma-separated values.
+- If admin IPs are empty, the backend uses `OFFICE_ALLOWED_IPS` from Render.
+- If both admin IPs and `OFFICE_ALLOWED_IPS` are empty, the office public IP check is disabled.
+- Monthly email reports can be sent manually from **Admin -> Employee Tools -> Monthly Email Report**.
+- Automatic monthly reports run on the 1st day of the month when the backend service is awake/running.

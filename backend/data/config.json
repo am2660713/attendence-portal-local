@@ -1,0 +1,15 @@
+{
+  "office": {
+    "name": "Main Office",
+    "latitude": 18.574619,
+    "longitude": 73.954673,
+    "radiusMeters": 150,
+    "allowedIps": []
+  },
+  "timezone": "Asia/Kolkata",
+  "shift": {
+    "start": "09:30",
+    "end": "18:30",
+    "graceMinutes": 15
+  }
+}

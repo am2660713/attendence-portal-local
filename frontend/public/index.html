@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ICT Solutions Pvt Ltd | Attendance Portal</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="hero">
+        <p class="company">ICT Solutions Pvt Ltd</p>
+        <p class="kicker">Workday Flow</p>
+        <h1>Attendance Portal</h1>
+        <p class="muted">Fast mobile check-in and check-out with office geofence, admin tools, and employee management.</p>
+        <div class="hero-badges" aria-hidden="true">
+          <span class="chip">GPS Check-In</span>
+          <span class="chip">HR Reports</span>
+          <span class="chip">Secure Admin</span>
+        </div>
+      </section>
+
+      <section class="card login-card" id="loginCard">
+        <div class="login-layout">
+          <aside class="login-visual">
+            <p class="login-kicker">Secure Access</p>
+            <h2>Company laptop attendance, made simple.</h2>
+            <p class="login-copy">
+              Employee login is bound to the approved company laptop so attendance stays clean and harder to fake.
+            </p>
+            <div class="login-points">
+              <div>
+                <strong>One device</strong>
+                <span>Approved laptop binding</span>
+              </div>
+              <div>
+                <strong>Office first</strong>
+                <span>Location check before punch</span>
+              </div>
+              <div>
+                <strong>HR control</strong>
+                <span>Reset laptop access anytime</span>
+              </div>
+            </div>
+          </aside>
+
+          <div class="login-form">
+            <div class="login-ribbon">
+              <span>Employee Portal</span>
+              <strong>Sign in with your company laptop</strong>
+            </div>
+            <label for="employeeId">Employee ID</label>
+            <input id="employeeId" placeholder="EMP001" />
+            <label>Work Location</label>
+            <div class="work-mode-toggle" role="radiogroup" aria-label="Select work location">
+              <label class="work-mode-option">
+                <input type="radio" name="workMode" value="WFO" checked />
+                <span>Office</span>
+              </label>
+              <label class="work-mode-option">
+                <input type="radio" name="workMode" value="WFH" />
+                <span>Home</span>
+              </label>
+            </div>
+            <button id="loginBtn" class="primary">Login</button>
+            <p id="loginMsg" class="msg"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card hidden" id="dashboardCard">
+        <div class="row between">
+          <div>
+            <h2 id="empName"></h2>
+            <p class="muted" id="empDept"></p>
+          </div>
+          <button id="logoutBtn" class="secondary small">Logout</button>
+        </div>
+
+        <div class="status" id="todayStatus">No attendance yet for today.</div>
+
+        <div class="action-grid">
+          <button id="checkInBtn" class="success">Check In</button>
+          <button id="checkOutBtn" class="danger">Check Out</button>
+        </div>
+
+        <p id="actionMsg" class="msg"></p>
+
+        <h3>Recent Records</h3>
+        <div id="history" class="history"></div>
+      </section>
+
+      <button id="adminTabBtn" class="admin-tab" type="button">Admin</button>
+
+      <section class="admin-modal hidden" id="adminModal">
+        <div class="admin-modal-card">
+          <div class="row between">
+            <h3>Admin Access</h3>
+            <button id="closeAdminModalBtn" class="secondary small" type="button">Close</button>
+          </div>
+          <p class="muted">Enter password to open admin tools.</p>
+          <label for="adminPassword">Admin Password</label>
+          <div class="password-field">
+            <input id="adminPassword" type="password" placeholder="Enter password" />
+            <button id="toggleAdminPasswordBtn" class="password-toggle" type="button" aria-label="Show password">Show</button>
+          </div>
+          <button id="unlockAdminBtn" class="primary" type="button">Unlock Admin</button>
+          <p id="unlockMsg" class="msg"></p>
+        </div>
+      </section>
+
+      <section class="admin-modal hidden" id="adminPanelModal">
+        <div class="admin-modal-card">
+          <div class="row between">
+            <h3>Admin Panel</h3>
+            <div class="row">
+              <button id="closeAdminPanelBtn" class="secondary small" type="button">Close</button>
+              <button id="lockAdminBtn" class="secondary small" type="button">Lock</button>
+            </div>
+          </div>
+          <p class="muted">Add employees and view all registered users.</p>
+          <div class="admin-tabs" role="tablist" aria-label="Admin panel sections">
+            <button class="admin-view-btn active" type="button" data-admin-view-btn="tools">Employee Tools</button>
+            <button class="admin-view-btn" type="button" data-admin-view-btn="summary">HR Summary</button>
+            <button class="admin-view-btn" type="button" data-admin-view-btn="list">Employee List</button>
+            <button class="admin-view-btn" type="button" data-admin-view-btn="security">Change Password</button>
+          </div>
+          <div class="admin-panel-grid">
+            <section class="admin-panel-section admin-view-pane" data-admin-view="tools">
+              <h3>Employee Tools</h3>
+              <label for="newEmployeeId">Employee ID</label>
+              <input id="newEmployeeId" placeholder="EMP004" />
+              <label for="newEmployeeName">Employee Name</label>
+              <input id="newEmployeeName" placeholder="Neha Patil" />
+              <label for="newEmployeeDepartment">Department</label>
+              <select id="newEmployeeDepartment">
+                <option value="">Select department</option>
+                <option value="Software">Software</option>
+                <option value="Hardware">Hardware</option>
+                <option value="Graphics">Graphics</option>
+                <option value="Admin">Admin</option>
+                <option value="Estimation">Estimation</option>
+                <option value="Clockworks">Clockworks</option>
+                <option value="Human Resources">Human Resources</option>
+              </select>
+              <button id="addEmployeeBtn" class="primary" type="button">Add Employee</button>
+              <button id="importEmployeesBtn" class="secondary full" type="button">Import Employees Excel/CSV</button>
+              <input id="importEmployeesInput" type="file" accept=".csv,text/csv" class="hidden" />
+              <button id="exportAttendanceBtn" class="secondary full" type="button">Download Attendance Excel</button>
+              <p id="adminMsg" class="msg"></p>
+
+              <div class="admin-subsection">
+                <h3>Office Location</h3>
+                <label for="officeName">Office Name</label>
+                <input id="officeName" placeholder="Main Office" />
+                <label for="officeLatitude">Latitude</label>
+                <input id="officeLatitude" type="number" step="any" placeholder="18.574619" />
+                <label for="officeLongitude">Longitude</label>
+                <input id="officeLongitude" type="number" step="any" placeholder="73.954673" />
+                <label for="officeRadius">Radius in meters</label>
+                <input id="officeRadius" type="number" step="1" min="10" max="5000" placeholder="150" />
+                <label for="officeAllowedIps">Allowed Office IPs</label>
+                <div class="current-ip-box">
+                  <span>Current IP</span>
+                  <strong id="currentOfficeIp">Unlock admin to view</strong>
+                  <button id="addCurrentIpBtn" class="mini-secondary" type="button">Add Current IP</button>
+                </div>
+                <textarea id="officeAllowedIps" rows="4" placeholder="203.0.113.10&#10;203.0.113.11"></textarea>
+                <button id="saveOfficeLocationBtn" class="secondary full" type="button">Save Office Location</button>
+                <p id="officeLocationMsg" class="msg"></p>
+              </div>
+
+              <div class="admin-subsection">
+                <h3>Monthly Email Report</h3>
+                <p class="muted">Send employee monthly attendance CSV to HR/Admin email.</p>
+                <label for="reportEmails">HR/Admin Emails</label>
+                <textarea id="reportEmails" rows="3" placeholder="hr@company.com&#10;admin@company.com"></textarea>
+                <div class="report-actions">
+                  <button id="saveReportEmailsBtn" class="secondary full" type="button">Save Report Emails</button>
+                  <button id="sendMonthlyReportBtn" class="primary" type="button">Send Previous Month Report</button>
+                </div>
+                <p id="reportEmailStatus" class="muted"></p>
+                <p id="reportEmailMsg" class="msg"></p>
+              </div>
+            </section>
+
+            <section class="admin-panel-section admin-view-pane hidden" data-admin-view="summary">
+              <h3>HR Monthly Summary</h3>
+              <div class="summary-controls">
+                <div class="summary-control">
+                  <label for="summaryMonth">Month</label>
+                  <input id="summaryMonth" type="month" />
+                </div>
+                <div class="summary-control">
+                  <label for="summarySearch">Search employee</label>
+                  <input id="summarySearch" placeholder="Search by name or ID" />
+                </div>
+                <div class="summary-control">
+                  <label for="summaryDepartment">Department</label>
+                  <select id="summaryDepartment">
+                    <option value="All">All departments</option>
+                    <option value="Software">Software</option>
+                    <option value="Hardware">Hardware</option>
+                    <option value="Graphics">Graphics</option>
+                    <option value="Admin">Admin</option>
+                    <option value="Estimation">Estimation</option>
+                    <option value="Clockworks">Clockworks</option>
+                    <option value="Human Resources">Human Resources</option>
+                  </select>
+                </div>
+                <div class="summary-control">
+                  <label for="summaryPageSize">Rows per page</label>
+                  <select id="summaryPageSize">
+                    <option value="all" selected>All</option>
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                  </select>
+                </div>
+                <div class="summary-control summary-control-actions">
+                  <button id="loadSummaryBtn" class="secondary full" type="button">Apply Filters</button>
+                </div>
+              </div>
+              <div id="summaryStats" class="status"></div>
+              <div id="summaryTable" class="history"></div>
+              <div class="pager">
+                <button id="summaryPrevBtn" class="secondary small" type="button">Prev</button>
+                <span id="summaryPageInfo" class="pager-info">Page 1</span>
+                <button id="summaryNextBtn" class="secondary small" type="button">Next</button>
+              </div>
+            </section>
+
+            <section class="admin-panel-section admin-view-pane hidden full-width" data-admin-view="list">
+              <h3>Employee List</h3>
+              <p class="muted">Shows all employee details in one table.</p>
+              <div id="employeeList" class="history"></div>
+              <div class="pager">
+                <label for="employeePageSize" class="pager-label">Rows per page</label>
+                <select id="employeePageSize">
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="all">All</option>
+                </select>
+                <button id="employeePrevBtn" class="secondary small" type="button">Prev</button>
+                <span id="employeePageInfo" class="pager-info">Page 1</span>
+                <button id="employeeNextBtn" class="secondary small" type="button">Next</button>
+              </div>
+            </section>
+
+            <section class="admin-panel-section admin-view-pane hidden" data-admin-view="security">
+              <h3>Change Password</h3>
+              <p class="muted">Update the admin password from here. Changes apply immediately.</p>
+              <label for="currentAdminPassword">Current Password</label>
+              <div class="password-field">
+                <input id="currentAdminPassword" type="password" placeholder="Current password" />
+                <button id="toggleCurrentAdminPasswordBtn" class="password-toggle" type="button" aria-label="Show current password">Show</button>
+              </div>
+              <label for="newAdminPassword">New Password</label>
+              <div class="password-field">
+                <input id="newAdminPassword" type="password" placeholder="New password" />
+                <button id="toggleNewAdminPasswordBtn" class="password-toggle" type="button" aria-label="Show new password">Show</button>
+              </div>
+              <label for="confirmAdminPassword">Confirm New Password</label>
+              <input id="confirmAdminPassword" type="password" placeholder="Confirm new password" />
+              <button id="changeAdminPasswordBtn" class="primary" type="button">Change Admin Password</button>
+              <p id="changeAdminPasswordMsg" class="msg"></p>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/config.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

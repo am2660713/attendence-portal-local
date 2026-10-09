@@ -1,0 +1,16 @@
+{
+  "name": "attendance-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "seed": "node src/seed.js",
+    "db:create-local": "node src/createLocalDatabase.js",
+    "seed:attendance": "node src/seedSampleAttendance.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "pg": "^8.16.3"
+  }
+}
