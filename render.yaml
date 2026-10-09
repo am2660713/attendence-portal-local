@@ -17,6 +17,8 @@ services:
         sync: false
       - key: PGDATABASE
         sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
       - key: ALLOWED_ORIGINS
         sync: false
       - key: OFFICE_ALLOWED_IPS

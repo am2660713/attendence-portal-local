@@ -109,6 +109,9 @@ const setMessage = (el, text, ok = false) => {
   el.style.color = ok ? "#0f766e" : "#b91c1c";
 };
 
+const escapeHtml = (value) =>
+  String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+
 const callApi = async (path, method = "GET", body, extraHeaders = {}) => {
   const res = await fetch(`${API_BASE}${path}`, {
     method,
@@ -164,7 +167,7 @@ const renderHistory = async () => {
   historyEl.innerHTML = data.records
     .map(
       (r) =>
-        `<div class="record"><strong>${r.date}</strong> <span class="pin-badge">${r.workMode || "WFO"}</span><br/>In: ${r.checkInAt || "-"}<br/>Out: ${r.checkOutAt || "-"}<br/>Time Period: ${formatTimePeriod(r)}</div>`
+        `<div class="record"><strong>${escapeHtml(r.date)}</strong> <span class="pin-badge">${escapeHtml(r.workMode || "WFO")}</span><br/>In: ${escapeHtml(r.checkInAt || "-")}<br/>Out: ${escapeHtml(r.checkOutAt || "-")}<br/>Time Period: ${escapeHtml(formatTimePeriod(r))}</div>`
     )
     .join("");
 };
@@ -254,7 +257,7 @@ const loadOfficeSettings = async () => {
 
   try {
     const [config, currentIp] = await Promise.all([
-      callApi("/config"),
+      callApi("/config", "GET", undefined, { "x-admin-token": adminToken || "" }),
       adminUnlocked && adminToken
         ? callApi("/admin/current-ip", "GET", undefined, { "x-admin-token": adminToken || "" })
         : Promise.resolve({ ip: "" }),
@@ -354,21 +357,21 @@ const renderEmployees = async () => {
           ${pageItems
             .map(
               (emp) => `
-                <tr data-employee-id="${emp.id}">
-                  <td><span class="employee-code standalone">${emp.id}</span></td>
+                <tr data-employee-id="${escapeHtml(emp.id)}">
+                  <td><span class="employee-code standalone">${escapeHtml(emp.id)}</span></td>
                   <td class="employee-name-cell">
-                    <strong>${emp.name}</strong>
-                    <span class="employee-subtext">${emp.department}</span>
+                    <strong>${escapeHtml(emp.name)}</strong>
+                    <span class="employee-subtext">${escapeHtml(emp.department)}</span>
                   </td>
-                  <td>${emp.department}</td>
+                  <td>${escapeHtml(emp.department)}</td>
                   <td>
                     <span class="pin-badge">${
                       emp.deviceBound
-                        ? `Approved company laptop${emp.deviceLabel ? `: ${emp.deviceLabel}` : ""}`
+                        ? `Approved company laptop${emp.deviceLabel ? `: ${escapeHtml(emp.deviceLabel)}` : ""}`
                         : "Laptop not bound yet"
                     }</span>
                   </td>
-                  <td>${emp.deviceLabel || "—"}</td>
+                  <td>${escapeHtml(emp.deviceLabel || "—")}</td>
                   <td>${emp.device_bound_at ? new Date(emp.device_bound_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—"}</td>
                   <td>
                     <span class="pin-badge ${emp.wfhAllowed ? "success-badge" : "warning-badge"}">
@@ -376,11 +379,11 @@ const renderEmployees = async () => {
                     </span>
                   </td>
                   <td class="employee-actions-cell">
-                    <button class="mini-secondary toggle-wfh-btn" data-employee-id="${emp.id}" data-wfh-allowed="${emp.wfhAllowed ? "false" : "true"}" type="button">
+                    <button class="mini-secondary toggle-wfh-btn" data-employee-id="${escapeHtml(emp.id)}" data-wfh-allowed="${emp.wfhAllowed ? "false" : "true"}" type="button">
                       ${emp.wfhAllowed ? "Block WFH" : "Allow WFH"}
                     </button>
-                    <button class="mini-secondary reset-device-btn" data-employee-id="${emp.id}" type="button">Reset Laptop</button>
-                    <button class="mini-danger remove-employee-btn" data-employee-id="${emp.id}" type="button">Remove</button>
+                    <button class="mini-secondary reset-device-btn" data-employee-id="${escapeHtml(emp.id)}" type="button">Reset Laptop</button>
+                    <button class="mini-danger remove-employee-btn" data-employee-id="${escapeHtml(emp.id)}" type="button">Remove</button>
                   </td>
                 </tr>
               `
@@ -493,14 +496,14 @@ const renderSummary = async () => {
               .map(
                 (item) => `
                   <tr>
-                    <td class="summary-employee-cell"><strong>${item.name}</strong></td>
-                    <td>${item.department}</td>
+                    <td class="summary-employee-cell"><strong>${escapeHtml(item.name)}</strong></td>
+                    <td>${escapeHtml(item.department)}</td>
                     <td>${Number(item.wfoDays || 0)}</td>
                     <td>${Number(item.wfhDays || 0)}</td>
                     <td>${Number(item.daysPresent || 0)}</td>
                     <td>${Number(item.lateDays || 0)}</td>
                     <td>${Number(item.overtimeHours || 0).toFixed(2)}</td>
-                    <td>${item.timePeriod || "00:00:00"}</td>
+                    <td>${escapeHtml(item.timePeriod || "00:00:00")}</td>
                   </tr>
                 `
               )
@@ -518,7 +521,7 @@ const renderSummary = async () => {
     if (summaryNextBtn) summaryNextBtn.disabled = selectedPageSize === "all" || (data.page || summaryPage) >= summaryTotalPages;
   } catch (error) {
     summaryStats.textContent = "";
-    summaryTable.innerHTML = `<p class='msg'>${error.message}</p>`;
+    summaryTable.innerHTML = `<p class='msg'>${escapeHtml(error.message)}</p>`;
   }
 };
 

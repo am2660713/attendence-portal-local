@@ -5,6 +5,10 @@ dotenv.config();
 
 const { Pool } = pg;
 
+// Keep DATE columns as "YYYY-MM-DD" strings. The default parser turns them into
+// Date objects at server-local midnight, which breaks IST date math and shifts days.
+pg.types.setTypeParser(1082, (value) => value);
+
 const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
 
 const pool = hasDatabaseUrl

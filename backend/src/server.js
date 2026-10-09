@@ -9,6 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const configPath = path.join(__dirname, "..", "data", "config.json");
 const adminSessions = new Map();
+const MAX_OVERNIGHT_SHIFT_MS = 16 * 60 * 60 * 1000;
 const employeeSessions = new Map();
 const adminPasswordSeed = process.env.ADMIN_PASSWORD || "admin123";
 
@@ -17,7 +18,10 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || "*")
   .map((value) => value.trim())
   .filter(Boolean);
 const localAllowedOrigins = new Set(["http://localhost:3000", "http://localhost:3001"]);
-const isCloudflarePreviewOrigin = (origin) => /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/i.test(String(origin || "").trim());
+// Quick tunnels are for local mobile testing only; anyone can create one, so never trust them on Render.
+const isDeployed = process.env.NODE_ENV === "production" || Boolean(process.env.RENDER);
+const isCloudflarePreviewOrigin = (origin) =>
+  !isDeployed && /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/i.test(String(origin || "").trim());
 const allowedOfficeIps = (process.env.OFFICE_ALLOWED_IPS || "")
   .split(",")
   .map((value) => value.trim())
@@ -67,11 +71,14 @@ const parseIpList = (value) =>
     .split(/[\n,]+/)
     .map((item) => normalizeIp(item))
     .filter(Boolean);
+// The left-most X-Forwarded-For entries are whatever the client sent; only the right-most
+// one is added by our own proxy (Render), so that is the real client IP.
 const getRequestIp = (req) => {
   const forwardedFor = String(req.headers["x-forwarded-for"] || "")
     .split(",")
     .map((value) => normalizeIp(value))
-    .find(Boolean);
+    .filter(Boolean)
+    .pop();
   return forwardedFor || normalizeIp(req.socket.remoteAddress);
 };
 const isOfficeIpAllowedForConfig = (ip, config) => {
@@ -125,14 +132,55 @@ const writeConfig = async (config) => {
   );
 };
 const hashAdminPassword = (password, salt = crypto.randomBytes(16).toString("hex")) => {
-  const digest = crypto.createHash("sha256").update(`${salt}:${password}`).digest("hex");
-  return `${salt}:${digest}`;
+  const digest = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `scrypt:${salt}:${digest}`;
 };
+const isLegacyAdminHash = (storedValue) => !String(storedValue || "").startsWith("scrypt:");
 const verifyAdminPassword = (password, storedValue) => {
-  const [salt, digest] = String(storedValue || "").split(":");
-  if (!salt || !digest) return false;
-  const expected = crypto.createHash("sha256").update(`${salt}:${password}`).digest("hex");
+  const parts = String(storedValue || "").split(":");
+  let salt;
+  let digest;
+  let expected;
+  if (parts[0] === "scrypt") {
+    [, salt, digest] = parts;
+    if (!salt || !digest) return false;
+    expected = crypto.scryptSync(password, salt, 64).toString("hex");
+  } else {
+    // Older installs stored a single SHA-256 round; still accepted, then upgraded on login.
+    [salt, digest] = parts;
+    if (!salt || !digest) return false;
+    expected = crypto.createHash("sha256").update(`${salt}:${password}`).digest("hex");
+  }
   return digest.length === expected.length && crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(expected));
+};
+const saveAdminPassword = (password) =>
+  query(
+    `INSERT INTO admin_settings (setting_key, setting_value, updated_at)
+     VALUES ('admin_password', $1, NOW())
+     ON CONFLICT (setting_key)
+     DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
+    [hashAdminPassword(password)]
+  );
+
+const ADMIN_LOGIN_MAX_FAILURES = 5;
+const ADMIN_LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const adminLoginFailures = new Map();
+const getAdminLockoutMs = (ip) => {
+  const entry = adminLoginFailures.get(ip);
+  if (!entry) return 0;
+  if (entry.resetAt <= Date.now()) {
+    adminLoginFailures.delete(ip);
+    return 0;
+  }
+  return entry.count >= ADMIN_LOGIN_MAX_FAILURES ? entry.resetAt - Date.now() : 0;
+};
+const recordAdminLoginFailure = (ip) => {
+  const entry = adminLoginFailures.get(ip);
+  if (!entry || entry.resetAt <= Date.now()) {
+    adminLoginFailures.set(ip, { count: 1, resetAt: Date.now() + ADMIN_LOGIN_WINDOW_MS });
+    return;
+  }
+  entry.count += 1;
 };
 const getStoredAdminPassword = async () => {
   const res = await query("SELECT setting_value FROM admin_settings WHERE setting_key = 'admin_password'");
@@ -141,6 +189,9 @@ const getStoredAdminPassword = async () => {
 const ensureAdminPassword = async () => {
   const stored = await getStoredAdminPassword();
   if (stored) return;
+  if (!process.env.ADMIN_PASSWORD) {
+    console.warn("ADMIN_PASSWORD is not set; using the default admin password. Change it from the admin panel.");
+  }
   await query(
     `INSERT INTO admin_settings (setting_key, setting_value)
      VALUES ('admin_password', $1)`,
@@ -170,6 +221,7 @@ const toISTDateTime = (timestamp) => {
 };
 
 const parseISTDateTime = (dateString, timeString) => new Date(`${dateString}T${timeString}:00+05:30`).getTime();
+const getPreviousISTDate = (dateString) => getISTDate(parseISTDateTime(dateString, "12:00") - 24 * 60 * 60 * 1000);
 
 const toMinutes = (hhmm) => {
   const [hours, minutes] = String(hhmm || "0:0").split(":").map((part) => Number(part));
@@ -229,7 +281,7 @@ const parseBody = (req) =>
     req.on("data", (chunk) => {
       raw += chunk;
       if (raw.length > 1e6) {
-        reject(new Error("Payload too large"));
+        reject(new ClientError("Payload too large"));
         req.destroy();
       }
     });
@@ -238,13 +290,15 @@ const parseBody = (req) =>
       try {
         resolve(JSON.parse(raw));
       } catch {
-        reject(new Error("Invalid JSON"));
+        reject(new ClientError("Invalid JSON"));
       }
     });
   });
 
 const csvCell = (value) => {
-  const text = String(value ?? "");
+  let text = String(value ?? "");
+  // Stop spreadsheet apps from treating text cells as formulas.
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
   if (/[",\n]/.test(text)) {
     return `"${text.replace(/"/g, '""')}"`;
   }
@@ -388,12 +442,13 @@ const buildMonthlyReport = async (month) => {
 
 const sendMonthlyReportEmail = async (month, recipients) => {
   if (!resendApiKey) {
-    throw new Error("RESEND_API_KEY is not configured in Render environment variables.");
+    throw new ClientError("RESEND_API_KEY is not configured in Render environment variables.");
   }
   const emails = parseEmailList(recipients.join(","));
-  if (!emails.length) throw new Error("Add at least one valid HR/Admin report email.");
+  if (!emails.length) throw new ClientError("Add at least one valid HR/Admin report email.");
 
   const report = await buildMonthlyReport(month);
+  const { fromEmail } = await getReportSettings();
   const subject = `Attendance monthly report - ${report.month}`;
   const html = `
     <h2>Attendance Monthly Report - ${report.month}</h2>
@@ -416,7 +471,7 @@ const sendMonthlyReportEmail = async (month, recipients) => {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: reportFromEmail,
+      from: fromEmail,
       to: emails,
       subject,
       html,
@@ -431,7 +486,7 @@ const sendMonthlyReportEmail = async (month, recipients) => {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.message || "Failed to send monthly report email.");
+    throw new ClientError(data.message || "Failed to send monthly report email.");
   }
 
   for (const email of emails) {
@@ -490,6 +545,8 @@ const startMonthlyReportScheduler = () => {
   run();
   setInterval(run, 6 * 60 * 60 * 1000);
 };
+
+class ClientError extends Error {}
 
 const getAdminToken = (req) => String(req.headers["x-admin-token"] || "").trim();
 const getEmployeeToken = (req) => String(req.headers["x-employee-token"] || "").trim();
@@ -620,6 +677,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/api/config") {
+      // Contains office IPs and HR emails, so only the admin panel may read it.
+      if (!requireAdminSession(req, res, corsOrigin)) return;
       sendJson(res, 200, await readConfig(), corsOrigin);
       return;
     }
@@ -755,11 +814,25 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { message: "Password is required." }, corsOrigin);
         return;
       }
+      const clientIp = getRequestIp(req);
+      const lockoutMs = getAdminLockoutMs(clientIp);
+      if (lockoutMs > 0) {
+        sendJson(
+          res,
+          429,
+          { message: `Too many failed attempts. Try again in ${Math.ceil(lockoutMs / 60000)} minutes.` },
+          corsOrigin
+        );
+        return;
+      }
       const storedPassword = await getStoredAdminPassword();
       if (!storedPassword || !verifyAdminPassword(password, storedPassword)) {
+        recordAdminLoginFailure(clientIp);
         sendJson(res, 401, { message: "Invalid admin password." }, corsOrigin);
         return;
       }
+      adminLoginFailures.delete(clientIp);
+      if (isLegacyAdminHash(storedPassword)) await saveAdminPassword(password);
       const token = crypto.randomUUID();
       adminSessions.set(token, Date.now() + 8 * 60 * 60 * 1000);
       sendJson(res, 200, { message: "Admin unlocked.", token }, corsOrigin);
@@ -792,13 +865,11 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      await query(
-        `INSERT INTO admin_settings (setting_key, setting_value, updated_at)
-         VALUES ('admin_password', $1, NOW())
-         ON CONFLICT (setting_key)
-         DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
-        [hashAdminPassword(newPassword)]
-      );
+      await saveAdminPassword(newPassword);
+      const currentToken = getAdminToken(req);
+      for (const token of adminSessions.keys()) {
+        if (token !== currentToken) adminSessions.delete(token);
+      }
 
       sendJson(res, 200, { message: "Admin password changed successfully." }, corsOrigin);
       return;
@@ -1040,7 +1111,8 @@ const server = http.createServer(async (req, res) => {
            VALUES ($1, $2, $3)
            ON CONFLICT (id) DO UPDATE
            SET name = EXCLUDED.name,
-               department = EXCLUDED.department`,
+               department = EXCLUDED.department,
+               active = true`,
           [id, name, department]
         );
 
@@ -1289,7 +1361,17 @@ const server = http.createServer(async (req, res) => {
         `SELECT * FROM attendance WHERE employee_id = $1 AND attendance_date = $2`,
         [employeeId, today]
       );
-      const existing = existingRes.rows[0];
+      let existing = existingRes.rows[0];
+      if (!isCheckIn && !existing?.check_in_at) {
+        // Shifts that cross midnight: close yesterday's open record if it started recently.
+        const overnightRes = await query(
+          `SELECT * FROM attendance
+           WHERE employee_id = $1 AND attendance_date = $2
+             AND check_in_at IS NOT NULL AND check_out_at IS NULL AND check_in_at >= $3`,
+          [employeeId, getPreviousISTDate(today), now - MAX_OVERNIGHT_SHIFT_MS]
+        );
+        existing = overnightRes.rows[0] || existing;
+      }
       const workMode = isCheckIn ? sessionWorkMode : normalizeWorkMode(existing?.work_mode || sessionWorkMode);
 
       if (!isCheckIn && existing?.check_in_at && sessionWorkMode !== workMode) {
@@ -1334,9 +1416,12 @@ const server = http.createServer(async (req, res) => {
             employee_id, attendance_date, check_in_at, check_out_at, total_hours, status,
             check_in_latitude, check_in_longitude, check_in_ip, work_mode
           ) VALUES ($1, $2, $3, NULL, 0, 'IN', $4, $5, $6, $7)
+          ON CONFLICT (employee_id, attendance_date) DO NOTHING
           RETURNING attendance_date, check_in_at, check_out_at, total_hours, status, work_mode`,
           [employeeId, today, now, latitude, longitude, requestIp, workMode]
         );
+        // A concurrent request (double tap) already inserted today's row.
+        if (!insertRes.rows[0]) return sendJson(res, 409, { message: "Check-in already marked." }, corsOrigin);
 
         sendJson(res, 200, { message: "Check-in marked successfully.", record: mapAttendance(insertRes.rows[0], config) }, corsOrigin);
         return;
@@ -1384,11 +1469,27 @@ const server = http.createServer(async (req, res) => {
 
     sendJson(res, 404, { message: "Route not found." }, corsOrigin);
   } catch (error) {
-    sendJson(res, 500, { message: error.message || "Unexpected server error" }, corsOrigin);
+    if (error instanceof ClientError) {
+      sendJson(res, 400, { message: error.message }, corsOrigin);
+      return;
+    }
+    console.error(`${req.method} ${req.url} failed:`, error);
+    sendJson(res, 500, { message: "Unexpected server error" }, corsOrigin);
   }
 });
 
 const PORT = Number(process.env.PORT || 4000);
+
+const sweepExpiredSessions = () => {
+  const now = Date.now();
+  for (const [token, expiresAt] of adminSessions) {
+    if (expiresAt <= now) adminSessions.delete(token);
+  }
+  for (const [token, session] of employeeSessions) {
+    if (session.expiresAt <= now) employeeSessions.delete(token);
+  }
+};
+setInterval(sweepExpiredSessions, 60 * 60 * 1000).unref();
 
 initDb()
   .then(() => {

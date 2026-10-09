@@ -44,8 +44,21 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  const reqPath = req.url === "/" ? "/index.html" : req.url;
-  const filePath = path.join(publicDir, reqPath);
+  let pathname;
+  try {
+    pathname = decodeURIComponent(new URL(req.url || "/", "http://localhost").pathname);
+  } catch {
+    res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Bad request");
+    return;
+  }
+  const reqPath = pathname === "/" ? "/index.html" : pathname;
+  const filePath = path.resolve(publicDir, `.${path.posix.normalize(reqPath)}`);
+  if (filePath !== publicDir && !filePath.startsWith(publicDir + path.sep)) {
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Not found");
+    return;
+  }
 
   fs.readFile(filePath, (err, data) => {
     if (err) {
