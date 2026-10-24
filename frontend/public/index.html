@@ -4,93 +4,147 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ICT Solutions Pvt Ltd | Attendance Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="app">
-      <section class="hero">
-        <p class="company">ICT Solutions Pvt Ltd</p>
-        <p class="kicker">Workday Flow</p>
-        <h1>Attendance Portal</h1>
-        <p class="muted">Fast mobile check-in and check-out with office geofence, admin tools, and employee management.</p>
-        <div class="hero-badges" aria-hidden="true">
-          <span class="chip">GPS Check-In</span>
-          <span class="chip">HR Reports</span>
-          <span class="chip">Secure Admin</span>
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+          </span>
+          <div>
+            <p class="brand-name">ICT Solutions Pvt Ltd</p>
+            <p class="brand-sub">Attendance Portal</p>
+          </div>
         </div>
-      </section>
+        <div class="clock" aria-live="off">
+          <strong id="liveClock">--:--</strong>
+          <span id="liveDate">India Standard Time</span>
+        </div>
+      </header>
 
       <section class="card login-card" id="loginCard">
         <div class="login-layout">
-          <aside class="login-visual">
-            <p class="login-kicker">Secure Access</p>
-            <h2>Company laptop attendance, made simple.</h2>
-            <p class="login-copy">
-              Employee login is bound to the approved company laptop so attendance stays clean and harder to fake.
-            </p>
-            <div class="login-points">
-              <div>
-                <strong>One device</strong>
-                <span>Approved laptop binding</span>
-              </div>
-              <div>
-                <strong>Office first</strong>
-                <span>Location check before punch</span>
-              </div>
-              <div>
-                <strong>HR control</strong>
-                <span>Reset laptop access anytime</span>
-              </div>
-            </div>
-          </aside>
-
           <div class="login-form">
-            <div class="login-ribbon">
-              <span>Employee Portal</span>
-              <strong>Sign in with your company laptop</strong>
-            </div>
+            <p class="eyebrow">Employee sign in</p>
+            <h1 class="login-title">Mark your attendance</h1>
+            <p class="muted">Use your employee ID on your approved company laptop.</p>
+
             <label for="employeeId">Employee ID</label>
-            <input id="employeeId" placeholder="EMP001" />
-            <label>Work Location</label>
+            <div class="input-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+              <input id="employeeId" placeholder="e.g. ICT0001" autocomplete="username" />
+            </div>
+
+            <label>Where are you working today?</label>
             <div class="work-mode-toggle" role="radiogroup" aria-label="Select work location">
               <label class="work-mode-option">
                 <input type="radio" name="workMode" value="WFO" checked />
-                <span>Office</span>
+                <span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5l8-3 8 3v16"/><path d="M9 21v-4h6v4M8 8h2M14 8h2M8 12h2M14 12h2"/></svg>
+                  Office
+                </span>
               </label>
               <label class="work-mode-option">
                 <input type="radio" name="workMode" value="WFH" />
-                <span>Home</span>
+                <span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8"/><path d="M5 9.5V21h14V9.5M10 21v-6h4v6"/></svg>
+                  Home
+                </span>
               </label>
             </div>
-            <button id="loginBtn" class="primary">Login</button>
+
+            <button id="loginBtn" class="primary login-btn">
+              Login
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </button>
             <p id="loginMsg" class="msg"></p>
           </div>
+
+          <aside class="login-visual">
+            <p class="login-kicker">Why it's secure</p>
+            <h2>Attendance you can trust.</h2>
+            <ul class="login-points">
+              <li>
+                <span class="point-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg></span>
+                <div><strong>Approved laptop only</strong><span>HR approves each new laptop before first use</span></div>
+              </li>
+              <li>
+                <span class="point-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+                <div><strong>Office location check</strong><span>GPS and office network verified on every punch</span></div>
+              </li>
+              <li>
+                <span class="point-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></span>
+                <div><strong>HR reports</strong><span>Monthly summary with late marks and overtime</span></div>
+              </li>
+            </ul>
+          </aside>
         </div>
       </section>
 
-      <section class="card hidden" id="dashboardCard">
-        <div class="row between">
-          <div>
-            <h2 id="empName"></h2>
-            <p class="muted" id="empDept"></p>
+      <section class="card dashboard-card hidden" id="dashboardCard">
+        <div class="dash-header">
+          <div class="dash-person">
+            <span class="avatar" id="empAvatar" aria-hidden="true">--</span>
+            <div>
+              <p class="greeting" id="greeting">Welcome</p>
+              <h2 id="empName"></h2>
+              <p class="muted" id="empDept"></p>
+            </div>
           </div>
-          <button id="logoutBtn" class="secondary small">Logout</button>
+          <button id="logoutBtn" class="secondary small logout-btn">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>
+            Logout
+          </button>
         </div>
 
-        <div class="status" id="todayStatus">No attendance yet for today.</div>
+        <div class="today-panel">
+          <div class="today-head">
+            <h3>Today</h3>
+            <span class="today-state" id="todayState">Not checked in</span>
+          </div>
+          <div class="today-tiles">
+            <div class="tile">
+              <span>Check in</span>
+              <strong id="todayIn">--</strong>
+            </div>
+            <div class="tile">
+              <span>Check out</span>
+              <strong id="todayOut">--</strong>
+            </div>
+            <div class="tile">
+              <span>Time worked</span>
+              <strong id="todayWorked">--</strong>
+            </div>
+          </div>
+          <div class="status" id="todayStatus">No attendance yet for today.</div>
+        </div>
 
         <div class="action-grid">
-          <button id="checkInBtn" class="success">Check In</button>
-          <button id="checkOutBtn" class="danger">Check Out</button>
+          <button id="checkInBtn" class="success action-btn">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M14 4h5v16h-5"/></svg>
+            Check In
+          </button>
+          <button id="checkOutBtn" class="danger action-btn">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 7l5 5-5 5M19 12H7M10 4H5v16h5"/></svg>
+            Check Out
+          </button>
         </div>
 
         <p id="actionMsg" class="msg"></p>
 
-        <h3>Recent Records</h3>
+        <h3 class="section-title">Recent records</h3>
         <div id="history" class="history"></div>
       </section>
 
-      <button id="adminTabBtn" class="admin-tab" type="button">Admin</button>
+      <button id="adminTabBtn" class="admin-tab" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        Admin
+      </button>
 
       <section class="admin-modal hidden" id="adminModal">
         <div class="admin-modal-card">

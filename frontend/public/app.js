@@ -9,6 +9,14 @@ const loginMsg = document.getElementById("loginMsg");
 const empName = document.getElementById("empName");
 const empDept = document.getElementById("empDept");
 const todayStatus = document.getElementById("todayStatus");
+const todayState = document.getElementById("todayState");
+const todayIn = document.getElementById("todayIn");
+const todayOut = document.getElementById("todayOut");
+const todayWorked = document.getElementById("todayWorked");
+const empAvatar = document.getElementById("empAvatar");
+const greetingEl = document.getElementById("greeting");
+const liveClock = document.getElementById("liveClock");
+const liveDate = document.getElementById("liveDate");
 const checkInBtn = document.getElementById("checkInBtn");
 const checkOutBtn = document.getElementById("checkOutBtn");
 const actionMsg = document.getElementById("actionMsg");
@@ -197,6 +205,50 @@ const getLocation = () =>
     );
   });
 
+let checkedInToday = false;
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// Server times look like "24 Oct 2026, 09:31:05 am"; the dashboard only needs "09:31 am".
+const toShortTime = (istDateTime) => {
+  if (!istDateTime) return "--";
+  const time = String(istDateTime).split(", ").pop();
+  return time.replace(/:(\d{2})(\s*[ap]m)$/i, "$2");
+};
+const formatWorked = (timePeriod) => {
+  const [hours = 0, minutes = 0] = String(timePeriod || "").split(":").map(Number);
+  return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+};
+const formatLongDate = (isoDate) => {
+  const [year, month, day] = String(isoDate || "").split("-").map(Number);
+  if (!year) return "Today";
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-IN", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  });
+};
+const getISTHour = () =>
+  Number(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata", hour: "numeric", hour12: false })) % 24;
+const showEmployee = (employee) => {
+  const hour = getISTHour();
+  const greetingWord = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const firstName = String(employee.name || "").split(" ")[0];
+  greetingEl.textContent = `${greetingWord}${firstName ? `, ${firstName}` : ""}`;
+  empName.textContent = employee.name || employee.id;
+  empDept.textContent = `${employee.id} · ${employee.department} · ${employee.workMode === "WFH" ? "Home" : "Office"}`;
+  empAvatar.textContent = String(employee.name || employee.id || "?")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join("");
+};
+const updateClock = () => {
+  const now = new Date();
+  liveClock.textContent = now.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
+  liveDate.textContent = now.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short" });
+};
+
 const renderToday = async () => {
   const today = await callApi(
     `/attendance/today?employeeId=${currentEmployee.id}`,
@@ -204,12 +256,25 @@ const renderToday = async () => {
     undefined,
     { "x-employee-token": employeeToken || "" }
   );
-  if (!today.record) {
-    todayStatus.textContent = `No attendance found for ${today.today}.`;
+  const record = today.record;
+  const checkedIn = Boolean(record?.checkInAt);
+  const checkedOut = Boolean(record?.checkOutAt);
+  todayIn.textContent = toShortTime(record?.checkInAt);
+  todayOut.textContent = toShortTime(record?.checkOutAt);
+  todayWorked.textContent = checkedOut ? formatWorked(record.timePeriod) : checkedIn ? "Ongoing" : "--";
+  todayState.textContent = checkedOut ? "Checked out" : checkedIn ? "Checked in" : "Not checked in";
+  todayState.classList.toggle("is-in", checkedIn && !checkedOut);
+  todayState.classList.toggle("is-out", checkedOut);
+  // Check-out stays available: it can be updated later, and overnight shifts close yesterday's record.
+  checkedInToday = checkedIn;
+  checkInBtn.disabled = checkedIn;
+
+  if (!record) {
+    todayStatus.textContent = `${formatLongDate(today.today)} · No attendance marked yet.`;
     return;
   }
-
-  todayStatus.textContent = `Date: ${today.record.date} | Mode: ${today.record.workMode || getEmployeeModeText()} | In: ${today.record.checkInAt || "-"} | Out: ${today.record.checkOutAt || "-"} | Time Period: ${formatTimePeriod(today.record)}`;
+  const lateText = record.lateMark ? ` · Late by ${record.lateByMinutes} min` : "";
+  todayStatus.textContent = `${formatLongDate(record.date)} · ${record.workMode === "WFH" ? "Working from home" : "Working from office"}${lateText}`;
 };
 
 const renderHistory = async () => {
@@ -225,10 +290,22 @@ const renderHistory = async () => {
   }
 
   historyEl.innerHTML = data.records
-    .map(
-      (r) =>
-        `<div class="record"><strong>${escapeHtml(r.date)}</strong> <span class="pin-badge">${escapeHtml(r.workMode || "WFO")}</span><br/>In: ${escapeHtml(r.checkInAt || "-")}<br/>Out: ${escapeHtml(r.checkOutAt || "-")}<br/>Time Period: ${escapeHtml(formatTimePeriod(r))}</div>`
-    )
+    .map((r) => {
+      const [, month, day] = String(r.date || "").split("-");
+      const monthName = MONTHS[Number(month) - 1] || "";
+      return `
+        <div class="record">
+          <div class="record-date"><strong>${escapeHtml(day || "--")}</strong><span>${escapeHtml(monthName)}</span></div>
+          <div class="record-times">
+            <span><b>In</b>${escapeHtml(toShortTime(r.checkInAt))}</span>
+            <span><b>Out</b>${escapeHtml(toShortTime(r.checkOutAt))}</span>
+          </div>
+          <div class="record-side">
+            <strong>${escapeHtml(r.checkOutAt ? formatWorked(formatTimePeriod(r)) : "Open")}</strong>
+            <span class="pin-badge ${r.lateMark ? "warning-badge" : ""}">${escapeHtml(r.workMode || "WFO")}${r.lateMark ? " · Late" : ""}</span>
+          </div>
+        </div>`;
+    })
     .join("");
 };
 
@@ -248,6 +325,8 @@ const endEmployeeSession = (message = "") => {
     input.checked = input.value === "WFO";
   });
   actionMsg.textContent = "";
+  checkedInToday = false;
+  checkInBtn.disabled = false;
   if (message) setMessage(loginMsg, message);
   else loginMsg.textContent = "";
 };
@@ -772,8 +851,7 @@ loginBtn.addEventListener("click", async () => {
     localStorage.setItem("attendanceEmployee", JSON.stringify(employee));
     localStorage.setItem("attendanceEmployeeToken", token);
 
-    empName.textContent = `${employee.name} (${employee.id})`;
-    empDept.textContent = `${employee.department} | ${employee.workMode || "WFO"}`;
+    showEmployee(employee);
 
     loginCard.classList.add("hidden");
     dashboardCard.classList.remove("hidden");
@@ -813,7 +891,7 @@ const markAttendance = async (path) => {
     }
     setMessage(actionMsg, error.message);
   } finally {
-    checkInBtn.disabled = false;
+    checkInBtn.disabled = checkedInToday;
     checkOutBtn.disabled = false;
   }
 };
@@ -1251,8 +1329,7 @@ const bootstrap = async () => {
   try {
     currentEmployee = JSON.parse(cached);
     employeeToken = cachedToken;
-    empName.textContent = `${currentEmployee.name} (${currentEmployee.id})`;
-    empDept.textContent = `${currentEmployee.department} | ${currentEmployee.workMode || "WFO"}`;
+    showEmployee(currentEmployee);
     loginCard.classList.add("hidden");
     dashboardCard.classList.remove("hidden");
     await refresh();
@@ -1266,6 +1343,8 @@ const bootstrap = async () => {
   }
 };
 
+updateClock();
+setInterval(updateClock, 15 * 1000);
 bootstrap();
 applyAdminVisibility();
 window.addEventListener("pageshow", applyAdminVisibility);
