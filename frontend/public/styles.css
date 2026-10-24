@@ -964,7 +964,8 @@ select:focus {
 }
 
 .employee-actions-cell .mini-secondary,
-.employee-actions-cell .mini-danger {
+.employee-actions-cell .mini-danger,
+.employee-actions-cell .mini-approve {
   margin-top: 0;
 }
 
@@ -1216,4 +1217,68 @@ select:focus {
     border-radius: 18px;
   }
 
+}
+
+.tab-count {
+  display: inline-flex;
+  min-width: 20px;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  justify-content: center;
+}
+
+.tab-count.hidden {
+  display: none;
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inline-check input {
+  width: auto;
+  margin: 0;
+}
+
+.device-log-controls {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.pending-badge {
+  background: rgba(196, 132, 18, 0.14);
+  color: #8a5a00;
+}
+
+.mini-approve {
+  width: auto;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: linear-gradient(120deg, #1f7a4f, #2f9a66);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 720px) {
+  .device-log-controls {
+    grid-template-columns: 1fr;
+  }
+}
+
+.employee-table.device-log-table {
+  min-width: 760px;
+}
+
+.device-log-table .employee-subtext {
+  display: block;
+  margin-top: 2px;
 }

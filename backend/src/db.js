@@ -67,6 +67,34 @@ export const initDb = async () => {
     ADD COLUMN IF NOT EXISTS wfh_allowed BOOLEAN NOT NULL DEFAULT FALSE;
   `);
 
+  // 'pending' until HR approves the laptop, then 'approved'; NULL when no laptop is bound.
+  await query(`
+    ALTER TABLE employees
+    ADD COLUMN IF NOT EXISTS device_status TEXT;
+  `);
+
+  // Laptops bound before approval existed stay trusted.
+  await query(`
+    UPDATE employees
+    SET device_status = 'approved'
+    WHERE device_token IS NOT NULL AND device_status IS NULL;
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS device_events (
+      id BIGSERIAL PRIMARY KEY,
+      employee_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      device_label TEXT,
+      ip TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS device_events_created_at_idx ON device_events (created_at DESC);
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS attendance (
       id BIGSERIAL PRIMARY KEY,

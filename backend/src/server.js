@@ -627,6 +627,23 @@ const buildDailyMetrics = (row, config) => {
   };
 };
 
+const DEVICE_EVENT_TYPES = new Set([
+  "login",
+  "approval_requested",
+  "blocked_pending",
+  "blocked_other_laptop",
+  "approved",
+  "rejected",
+  "reset",
+  "removed",
+]);
+const logDeviceEvent = (employeeId, eventType, { deviceLabel = null, ip = null } = {}) =>
+  query(
+    `INSERT INTO device_events (employee_id, event_type, device_label, ip)
+     VALUES ($1, $2, $3, $4)`,
+    [employeeId, eventType, deviceLabel, ip]
+  );
+
 const defaultEmployees = [
   { id: "EMP001", name: "Aarav Sharma", department: "Sales" },
   { id: "EMP002", name: "Priya Verma", department: "HR" },
@@ -754,7 +771,7 @@ const server = http.createServer(async (req, res) => {
       if (!deviceToken) return sendJson(res, 400, { message: "Device information is required." }, corsOrigin);
 
       const dbRes = await query(
-        "SELECT id, name, department, device_token, device_label, wfh_allowed FROM employees WHERE active = true AND id = $1",
+        "SELECT id, name, department, device_token, device_label, device_status, wfh_allowed FROM employees WHERE active = true AND id = $1",
         [rawInput]
       );
       const employee = dbRes.rows[0];
@@ -763,8 +780,15 @@ const server = http.createServer(async (req, res) => {
       if (workMode === "WFH" && !employee.wfh_allowed) {
         return sendJson(res, 403, { message: "WFH is not enabled for this employee. Please contact admin." }, corsOrigin);
       }
+      const deviceEvent = { deviceLabel: deviceLabel || "Unknown laptop", ip: getRequestIp(req) };
+      const lockedMessage = "This employee is locked to another company laptop.";
+
       if (employee.device_token && employee.device_token !== deviceToken) {
-        return sendJson(res, 403, { message: "This employee is locked to another company laptop." }, corsOrigin);
+        await logDeviceEvent(employee.id, "blocked_other_laptop", deviceEvent);
+        const message = employee.device_status === "pending"
+          ? "Another laptop is already waiting for HR approval for this employee ID. Please contact HR."
+          : lockedMessage;
+        return sendJson(res, 403, { message }, corsOrigin);
       }
 
       if (!employee.device_token) {
@@ -773,15 +797,36 @@ const server = http.createServer(async (req, res) => {
           `UPDATE employees
            SET device_token = $2,
                device_label = $3,
+               device_status = 'pending',
                device_bound_at = NOW()
-           WHERE id = $1 AND (device_token IS NULL OR device_token = $2)
+           WHERE id = $1 AND device_token IS NULL
            RETURNING id`,
-          [employee.id, deviceToken, deviceLabel || "Approved company laptop"]
+          [employee.id, deviceToken, deviceEvent.deviceLabel]
         );
         if (!bindRes.rows[0]) {
-          return sendJson(res, 403, { message: "This employee is locked to another company laptop." }, corsOrigin);
+          await logDeviceEvent(employee.id, "blocked_other_laptop", deviceEvent);
+          return sendJson(res, 403, { message: lockedMessage }, corsOrigin);
         }
+        await logDeviceEvent(employee.id, "approval_requested", deviceEvent);
+        return sendJson(
+          res,
+          403,
+          { message: "This laptop has been sent to HR for approval. You can log in once HR approves it.", code: "DEVICE_PENDING" },
+          corsOrigin
+        );
       }
+
+      if (employee.device_status !== "approved") {
+        await logDeviceEvent(employee.id, "blocked_pending", deviceEvent);
+        return sendJson(
+          res,
+          403,
+          { message: "This laptop is still waiting for HR approval.", code: "DEVICE_PENDING" },
+          corsOrigin
+        );
+      }
+
+      await logDeviceEvent(employee.id, "login", deviceEvent);
 
       const token = crypto.randomUUID();
       employeeSessions.set(token, {
@@ -795,9 +840,7 @@ const server = http.createServer(async (req, res) => {
         res,
         200,
         {
-          message: employee.device_token
-            ? "Company laptop verified. Login successful."
-            : "Company laptop approved and login successful.",
+          message: "Company laptop verified. Login successful.",
           employee: {
             id: employee.id,
             name: employee.name,
@@ -886,8 +929,11 @@ const server = http.createServer(async (req, res) => {
       const rawSearch = String(url.searchParams.get("search") || "").trim();
       const search = normalizeText(rawSearch);
       const department = String(url.searchParams.get("department") || "").trim();
+      const pendingOnly = url.searchParams.get("deviceStatus") === "pending";
       const clauses = ["active = true"];
       const params = [];
+
+      if (pendingOnly) clauses.push("device_status = 'pending'");
 
       if (department && department !== "All") {
         params.push(department);
@@ -905,10 +951,13 @@ const server = http.createServer(async (req, res) => {
       }
 
       const whereClause = clauses.join(" AND ");
-      const countRes = await query(`SELECT COUNT(*)::int AS count FROM employees WHERE ${whereClause}`, params);
+      const [countRes, pendingRes] = await Promise.all([
+        query(`SELECT COUNT(*)::int AS count FROM employees WHERE ${whereClause}`, params),
+        query("SELECT COUNT(*)::int AS count FROM employees WHERE active = true AND device_status = 'pending'"),
+      ]);
       const total = countRes.rows[0].count;
       const employeeQueryParams = [...params];
-      let employeeQueryText = `SELECT id, name, department, device_token, device_label, device_bound_at, wfh_allowed
+      let employeeQueryText = `SELECT id, name, department, device_token, device_label, device_status, device_bound_at, wfh_allowed
          FROM employees
          WHERE ${whereClause}
          ORDER BY id`;
@@ -924,15 +973,18 @@ const server = http.createServer(async (req, res) => {
         res,
         200,
         {
-          employees: dbRes.rows.map((employee) => ({
+          // The device token is the laptop's secret; the admin UI only needs to know whether one exists.
+          employees: dbRes.rows.map(({ device_token: deviceToken, ...employee }) => ({
             ...employee,
-            deviceBound: Boolean(employee.device_token),
+            deviceBound: Boolean(deviceToken),
+            deviceStatus: deviceToken ? employee.device_status || "approved" : "none",
             deviceLabel: employee.device_label || "",
             wfhAllowed: Boolean(employee.wfh_allowed),
           })),
           page,
           pageSize,
           total,
+          pendingDevices: pendingRes.rows[0].count,
           totalPages: pageSize ? Math.max(1, Math.ceil(total / pageSize)) : 1,
         },
         corsOrigin
@@ -987,13 +1039,19 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      const exists = await query("SELECT id FROM employees WHERE id = $1 AND active = true", [id]);
+      const exists = await query("SELECT id, device_label FROM employees WHERE id = $1 AND active = true", [id]);
       if (!exists.rows[0]) {
         sendJson(res, 404, { message: "Employee not found or already removed." }, corsOrigin);
         return;
       }
 
-      await query("UPDATE employees SET active = false, device_token = NULL, device_label = NULL, device_bound_at = NULL WHERE id = $1", [id]);
+      await query(
+        `UPDATE employees
+         SET active = false, device_token = NULL, device_label = NULL, device_status = NULL, device_bound_at = NULL
+         WHERE id = $1`,
+        [id]
+      );
+      await logDeviceEvent(id, "removed", { deviceLabel: exists.rows[0].device_label, ip: getRequestIp(req) });
       sendJson(res, 200, { message: "Employee removed successfully." }, corsOrigin);
       return;
     }
@@ -1007,14 +1065,109 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      const exists = await query("SELECT id FROM employees WHERE id = $1 AND active = true", [id]);
+      const exists = await query("SELECT id, device_label FROM employees WHERE id = $1 AND active = true", [id]);
       if (!exists.rows[0]) {
         sendJson(res, 404, { message: "Employee not found or inactive." }, corsOrigin);
         return;
       }
 
-      await query("UPDATE employees SET device_token = NULL, device_label = NULL, device_bound_at = NULL WHERE id = $1", [id]);
+      await query(
+        "UPDATE employees SET device_token = NULL, device_label = NULL, device_status = NULL, device_bound_at = NULL WHERE id = $1",
+        [id]
+      );
+      await logDeviceEvent(id, "reset", { deviceLabel: exists.rows[0].device_label, ip: getRequestIp(req) });
       sendJson(res, 200, { message: "Company laptop binding reset successfully." }, corsOrigin);
+      return;
+    }
+
+    if (req.method === "POST" && (url.pathname === "/api/admin/approve-device" || url.pathname === "/api/admin/reject-device")) {
+      if (!requireAdminSession(req, res, corsOrigin)) return;
+      const isApprove = url.pathname.endsWith("approve-device");
+      const body = await parseBody(req);
+      const id = String(body.id || "").trim().toUpperCase();
+      if (!id) {
+        sendJson(res, 400, { message: "Employee ID is required." }, corsOrigin);
+        return;
+      }
+
+      // Rejecting frees the employee so their real laptop can request approval.
+      const updateRes = await query(
+        isApprove
+          ? `UPDATE employees SET device_status = 'approved', device_bound_at = NOW()
+             WHERE id = $1 AND active = true AND device_status = 'pending'
+             RETURNING id, device_label`
+          : `UPDATE employees e SET device_token = NULL, device_label = NULL, device_status = NULL, device_bound_at = NULL
+             FROM (SELECT id, device_label FROM employees WHERE id = $1) old
+             WHERE e.id = old.id AND e.active = true AND e.device_status = 'pending'
+             RETURNING e.id, old.device_label`,
+        [id]
+      );
+      if (!updateRes.rows[0]) {
+        sendJson(res, 404, { message: "No pending laptop request for this employee." }, corsOrigin);
+        return;
+      }
+
+      await logDeviceEvent(id, isApprove ? "approved" : "rejected", {
+        deviceLabel: updateRes.rows[0].device_label,
+        ip: getRequestIp(req),
+      });
+      sendJson(
+        res,
+        200,
+        { message: isApprove ? `Laptop approved for ${id}.` : `Laptop request rejected for ${id}.` },
+        corsOrigin
+      );
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/admin/device-events") {
+      if (!requireAdminSession(req, res, corsOrigin)) return;
+      const { page, pageSize, offset } = getPagination(url, 20);
+      const employeeId = String(url.searchParams.get("employeeId") || "").trim().toUpperCase();
+      const eventType = String(url.searchParams.get("eventType") || "").trim();
+      const clauses = [];
+      const params = [];
+      if (employeeId) {
+        params.push(employeeId);
+        clauses.push(`d.employee_id = $${params.length}`);
+      }
+      if (DEVICE_EVENT_TYPES.has(eventType)) {
+        params.push(eventType);
+        clauses.push(`d.event_type = $${params.length}`);
+      }
+      const whereClause = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+      const countRes = await query(`SELECT COUNT(*)::int AS count FROM device_events d ${whereClause}`, params);
+      const total = countRes.rows[0].count;
+      const listParams = [...params];
+      let listQuery = `SELECT d.employee_id, e.name, d.event_type, d.device_label, d.ip, d.created_at
+         FROM device_events d
+         LEFT JOIN employees e ON e.id = d.employee_id
+         ${whereClause}
+         ORDER BY d.created_at DESC, d.id DESC`;
+      if (pageSize) {
+        listQuery += ` LIMIT $${listParams.length + 1} OFFSET $${listParams.length + 2}`;
+        listParams.push(pageSize, offset);
+      }
+      const eventsRes = await query(listQuery, listParams);
+      sendJson(
+        res,
+        200,
+        {
+          events: eventsRes.rows.map((row) => ({
+            employeeId: row.employee_id,
+            name: row.name || "",
+            eventType: row.event_type,
+            deviceLabel: row.device_label || "",
+            ip: row.ip || "",
+            createdAt: toISTDateTime(new Date(row.created_at).getTime()),
+          })),
+          page,
+          pageSize,
+          total,
+          totalPages: pageSize ? Math.max(1, Math.ceil(total / pageSize)) : 1,
+        },
+        corsOrigin
+      );
       return;
     }
 
@@ -1363,9 +1516,12 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 400, { message: "Latitude and longitude are required." }, corsOrigin);
       }
 
-      const empRes = await query("SELECT id, device_token, wfh_allowed FROM employees WHERE id = $1 AND active = true", [employeeId]);
+      const empRes = await query(
+        "SELECT id, device_token, device_status, wfh_allowed FROM employees WHERE id = $1 AND active = true",
+        [employeeId]
+      );
       if (!empRes.rows[0]) return sendJson(res, 404, { message: "Employee not found." }, corsOrigin);
-      if (empRes.rows[0].device_token !== employeeSession.deviceToken) {
+      if (empRes.rows[0].device_token !== employeeSession.deviceToken || empRes.rows[0].device_status !== "approved") {
         return sendJson(res, 403, { message: "Company laptop verification failed." }, corsOrigin);
       }
       if (isCheckIn && sessionWorkMode === "WFH" && !empRes.rows[0].wfh_allowed) {

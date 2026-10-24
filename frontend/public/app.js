@@ -68,6 +68,15 @@ const adminModal = document.getElementById("adminModal");
 const closeAdminModalBtn = document.getElementById("closeAdminModalBtn");
 const adminPanelModal = document.getElementById("adminPanelModal");
 const closeAdminPanelBtn = document.getElementById("closeAdminPanelBtn");
+const pendingDevicesBadge = document.getElementById("pendingDevicesBadge");
+const pendingOnlyToggle = document.getElementById("pendingOnlyToggle");
+const deviceLogEmployeeInput = document.getElementById("deviceLogEmployee");
+const deviceLogTypeSelect = document.getElementById("deviceLogType");
+const loadDeviceLogBtn = document.getElementById("loadDeviceLogBtn");
+const deviceLogEl = document.getElementById("deviceLog");
+const deviceLogPrevBtn = document.getElementById("deviceLogPrevBtn");
+const deviceLogNextBtn = document.getElementById("deviceLogNextBtn");
+const deviceLogPageInfo = document.getElementById("deviceLogPageInfo");
 const adminViewButtons = document.querySelectorAll("[data-admin-view-btn]");
 const adminViewPanes = document.querySelectorAll("[data-admin-view]");
 
@@ -81,6 +90,8 @@ let summaryPage = 1;
 let summaryTotalPages = 1;
 let employeePage = 1;
 let employeeTotalPages = 1;
+let deviceLogPage = 1;
+let deviceLogTotalPages = 1;
 const deviceTokenKey = "attendanceDeviceToken";
 const getDeviceToken = () => {
   const existing = localStorage.getItem(deviceTokenKey);
@@ -122,6 +133,7 @@ const callApi = async (path, method = "GET", body, extraHeaders = {}) => {
   if (!res.ok) {
     const error = new Error(data.message || `Request failed (${res.status})`);
     error.status = res.status;
+    error.code = data.code;
     throw error;
   }
   return data;
@@ -239,6 +251,9 @@ const setAdminView = (view) => {
   } else if (view === "list") {
     employeePage = 1;
     renderEmployees().catch((error) => setMessage(adminMsg, error.message));
+  } else if (view === "devices") {
+    deviceLogPage = 1;
+    renderDeviceLog();
   } else if (view === "tools") {
     loadOfficeSettings();
     loadReportSettings();
@@ -328,21 +343,104 @@ const getAdminFilters = (searchInput, departmentInput) => ({
   department: String(departmentInput?.value || "All").trim(),
 });
 
+const updatePendingDevicesBadge = (count) => {
+  if (!pendingDevicesBadge) return;
+  pendingDevicesBadge.textContent = String(count);
+  pendingDevicesBadge.classList.toggle("hidden", count <= 0);
+  pendingDevicesBadge.title = `${count} laptop${count === 1 ? "" : "s"} waiting for approval`;
+};
+
+const renderLaptopStatus = (emp) => {
+  const label = emp.deviceLabel ? `: ${escapeHtml(emp.deviceLabel)}` : "";
+  if (emp.deviceStatus === "pending") return `<span class="pin-badge pending-badge">Waiting for approval${label}</span>`;
+  if (emp.deviceStatus === "approved") return `<span class="pin-badge success-badge">Approved company laptop${label}</span>`;
+  return `<span class="pin-badge">Laptop not bound yet</span>`;
+};
+
+const DEVICE_EVENT_LABELS = {
+  login: ["Login", "success-badge"],
+  approval_requested: ["Approval requested", "pending-badge"],
+  approved: ["Approved", "success-badge"],
+  rejected: ["Rejected", "warning-badge"],
+  blocked_other_laptop: ["Blocked: other laptop", "warning-badge"],
+  blocked_pending: ["Blocked: awaiting approval", "pending-badge"],
+  reset: ["Laptop reset", ""],
+  removed: ["Employee removed", "warning-badge"],
+};
+
+const renderDeviceLog = async () => {
+  if (!deviceLogEl || !adminUnlocked || !adminToken) return;
+  try {
+    const params = new URLSearchParams({ page: String(deviceLogPage), pageSize: "20" });
+    const employeeId = String(deviceLogEmployeeInput?.value || "").trim();
+    const eventType = String(deviceLogTypeSelect?.value || "");
+    if (employeeId) params.set("employeeId", employeeId);
+    if (eventType) params.set("eventType", eventType);
+    const data = await callApi(`/admin/device-events?${params.toString()}`, "GET", undefined, {
+      "x-admin-token": adminToken || "",
+    });
+    deviceLogTotalPages = Number(data.totalPages || 1);
+    const events = Array.isArray(data.events) ? data.events : [];
+    deviceLogEl.innerHTML = events.length
+      ? `
+        <div class="employee-table-wrap">
+          <table class="employee-table device-log-table">
+            <thead>
+              <tr>
+                <th>Time (IST)</th>
+                <th>Employee</th>
+                <th>Event</th>
+                <th>Laptop</th>
+                <th>IP</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${events
+                .map((event) => {
+                  const [label, badgeClass] = DEVICE_EVENT_LABELS[event.eventType] || [event.eventType, ""];
+                  return `
+                    <tr>
+                      <td>${escapeHtml(event.createdAt)}</td>
+                      <td><strong>${escapeHtml(event.employeeId)}</strong>${event.name ? `<span class="employee-subtext">${escapeHtml(event.name)}</span>` : ""}</td>
+                      <td><span class="pin-badge ${badgeClass}">${escapeHtml(label)}</span></td>
+                      <td>${escapeHtml(event.deviceLabel || "—")}</td>
+                      <td>${escapeHtml(event.ip || "—")}</td>
+                    </tr>
+                  `;
+                })
+                .join("")}
+            </tbody>
+          </table>
+        </div>
+      `
+      : "<p class='muted'>No device activity found for these filters.</p>";
+    if (deviceLogPageInfo) deviceLogPageInfo.textContent = `Page ${data.page || deviceLogPage} of ${deviceLogTotalPages} (${Number(data.total || 0)} events)`;
+    if (deviceLogPrevBtn) deviceLogPrevBtn.disabled = deviceLogPage <= 1;
+    if (deviceLogNextBtn) deviceLogNextBtn.disabled = deviceLogPage >= deviceLogTotalPages;
+  } catch (error) {
+    deviceLogEl.innerHTML = `<p class='msg'>${escapeHtml(error.message)}</p>`;
+  }
+};
+
 const renderEmployees = async () => {
   const pageSize = String(employeePageSize?.value || "10");
   const params = new URLSearchParams({
     page: String(employeePage),
     pageSize,
   });
+  if (pendingOnlyToggle?.checked) params.set("deviceStatus", "pending");
   const data = await callApi(`/employees?${params.toString()}`, "GET", undefined, {
     "x-admin-token": adminToken || "",
   });
+  updatePendingDevicesBadge(Number(data.pendingDevices || 0));
   employeeTotalPages = Number(data.totalPages || 1);
   if (employeePage > employeeTotalPages) employeePage = employeeTotalPages;
   const pageItems = Array.isArray(data.employees) ? data.employees : [];
 
   if (!pageItems.length) {
-    employeeList.innerHTML = "<p class='muted'>No employees found.</p>";
+    employeeList.innerHTML = pendingOnlyToggle?.checked
+      ? "<p class='muted'>No laptops are waiting for approval.</p>"
+      : "<p class='muted'>No employees found.</p>";
     if (employeePageInfo) employeePageInfo.textContent = `Page ${employeePage} of ${employeeTotalPages}`;
     if (employeePrevBtn) employeePrevBtn.disabled = employeePage <= 1;
     if (employeeNextBtn) employeeNextBtn.disabled = employeePage >= employeeTotalPages;
@@ -385,13 +483,7 @@ const renderEmployees = async () => {
                     <span class="employee-subtext">${escapeHtml(emp.department)}</span>
                   </td>
                   <td>${escapeHtml(emp.department)}</td>
-                  <td>
-                    <span class="pin-badge">${
-                      emp.deviceBound
-                        ? `Approved company laptop${emp.deviceLabel ? `: ${escapeHtml(emp.deviceLabel)}` : ""}`
-                        : "Laptop not bound yet"
-                    }</span>
-                  </td>
+                  <td>${renderLaptopStatus(emp)}</td>
                   <td>${escapeHtml(emp.deviceLabel || "—")}</td>
                   <td>${emp.device_bound_at ? new Date(emp.device_bound_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }) : "—"}</td>
                   <td>
@@ -400,6 +492,10 @@ const renderEmployees = async () => {
                     </span>
                   </td>
                   <td class="employee-actions-cell">
+                    ${emp.deviceStatus === "pending"
+                      ? `<button class="mini-approve approve-device-btn" data-employee-id="${escapeHtml(emp.id)}" type="button">Approve Laptop</button>
+                    <button class="mini-danger reject-device-btn" data-employee-id="${escapeHtml(emp.id)}" type="button">Reject</button>`
+                      : ""}
                     <button class="mini-secondary toggle-wfh-btn" data-employee-id="${escapeHtml(emp.id)}" data-wfh-allowed="${emp.wfhAllowed ? "false" : "true"}" type="button">
                       ${emp.wfhAllowed ? "Block WFH" : "Allow WFH"}
                     </button>
@@ -636,7 +732,8 @@ loginBtn.addEventListener("click", async () => {
 
     await refresh();
   } catch (error) {
-    setMessage(currentEmployee ? actionMsg : loginMsg, error.message);
+    // Waiting for HR is expected on a new laptop, so it is not shown as an error.
+    setMessage(currentEmployee ? actionMsg : loginMsg, error.message, error.code === "DEVICE_PENDING");
   }
 });
 
@@ -705,13 +802,27 @@ employeeList.addEventListener("click", async (event) => {
   const resetButton = event.target.closest(".reset-device-btn");
   const toggleWfhButton = event.target.closest(".toggle-wfh-btn");
   const button = event.target.closest(".remove-employee-btn");
-  if (!resetButton && !toggleWfhButton && !button) return;
+  const approveButton = event.target.closest(".approve-device-btn");
+  const rejectButton = event.target.closest(".reject-device-btn");
+  const clicked = resetButton || toggleWfhButton || button || approveButton || rejectButton;
+  if (!clicked) return;
 
-  const employeeId = (resetButton || toggleWfhButton || button).dataset.employeeId;
+  const employeeId = clicked.dataset.employeeId;
   if (!employeeId) return;
 
   try {
-    if (toggleWfhButton) {
+    if (approveButton || rejectButton) {
+      if (rejectButton && !window.confirm(`Reject the laptop request for ${employeeId}? Their real laptop can then request approval.`)) {
+        return;
+      }
+      const data = await callApi(
+        approveButton ? "/admin/approve-device" : "/admin/reject-device",
+        "POST",
+        { id: employeeId },
+        { "x-admin-token": adminToken || "" }
+      );
+      setMessage(adminMsg, data.message, true);
+    } else if (toggleWfhButton) {
       const data = await callApi(
         "/admin/update-wfh",
         "POST",
@@ -820,6 +931,36 @@ summaryPageSize?.addEventListener("change", async () => {
 employeePageSize?.addEventListener("change", async () => {
   employeePage = 1;
   await renderEmployees();
+});
+
+pendingOnlyToggle?.addEventListener("change", () => {
+  employeePage = 1;
+  renderEmployees().catch((error) => setMessage(adminMsg, error.message));
+});
+
+const applyDeviceLogFilters = () => {
+  deviceLogPage = 1;
+  renderDeviceLog();
+};
+loadDeviceLogBtn?.addEventListener("click", applyDeviceLogFilters);
+deviceLogTypeSelect?.addEventListener("change", applyDeviceLogFilters);
+deviceLogEmployeeInput?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    applyDeviceLogFilters();
+  }
+});
+deviceLogPrevBtn?.addEventListener("click", () => {
+  if (deviceLogPage > 1) {
+    deviceLogPage -= 1;
+    renderDeviceLog();
+  }
+});
+deviceLogNextBtn?.addEventListener("click", () => {
+  if (deviceLogPage < deviceLogTotalPages) {
+    deviceLogPage += 1;
+    renderDeviceLog();
+  }
 });
 
 summarySearchInput?.addEventListener("keydown", async (event) => {

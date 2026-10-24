@@ -122,7 +122,8 @@
           <div class="admin-tabs" role="tablist" aria-label="Admin panel sections">
             <button class="admin-view-btn active" type="button" data-admin-view-btn="tools">Employee Tools</button>
             <button class="admin-view-btn" type="button" data-admin-view-btn="summary">HR Summary</button>
-            <button class="admin-view-btn" type="button" data-admin-view-btn="list">Employee List</button>
+            <button class="admin-view-btn" type="button" data-admin-view-btn="list">Employee List <span id="pendingDevicesBadge" class="tab-count hidden"></span></button>
+            <button class="admin-view-btn" type="button" data-admin-view-btn="devices">Device Log</button>
             <button class="admin-view-btn" type="button" data-admin-view-btn="security">Change Password</button>
           </div>
           <div class="admin-panel-grid">
@@ -231,7 +232,11 @@
 
             <section class="admin-panel-section admin-view-pane hidden full-width" data-admin-view="list">
               <h3>Employee List</h3>
-              <p class="muted">Shows all employee details in one table.</p>
+              <p class="muted">Shows all employee details in one table. New laptops must be approved before the employee can log in.</p>
+              <label class="inline-check" for="pendingOnlyToggle">
+                <input id="pendingOnlyToggle" type="checkbox" />
+                Show only laptops waiting for approval
+              </label>
               <div id="employeeList" class="history"></div>
               <div class="pager">
                 <label for="employeePageSize" class="pager-label">Rows per page</label>
@@ -243,6 +248,40 @@
                 <button id="employeePrevBtn" class="secondary small" type="button">Prev</button>
                 <span id="employeePageInfo" class="pager-info">Page 1</span>
                 <button id="employeeNextBtn" class="secondary small" type="button">Next</button>
+              </div>
+            </section>
+
+            <section class="admin-panel-section admin-view-pane hidden full-width" data-admin-view="devices">
+              <h3>Device Log</h3>
+              <p class="muted">Every laptop login, approval request, blocked attempt, and reset, newest first.</p>
+              <div class="summary-controls device-log-controls">
+                <div class="summary-control">
+                  <label for="deviceLogEmployee">Employee ID</label>
+                  <input id="deviceLogEmployee" placeholder="All employees" />
+                </div>
+                <div class="summary-control">
+                  <label for="deviceLogType">Event</label>
+                  <select id="deviceLogType">
+                    <option value="">All events</option>
+                    <option value="login">Login</option>
+                    <option value="approval_requested">Approval requested</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="blocked_other_laptop">Blocked: other laptop</option>
+                    <option value="blocked_pending">Blocked: awaiting approval</option>
+                    <option value="reset">Laptop reset</option>
+                    <option value="removed">Employee removed</option>
+                  </select>
+                </div>
+                <div class="summary-control summary-control-actions">
+                  <button id="loadDeviceLogBtn" class="secondary full" type="button">Apply Filters</button>
+                </div>
+              </div>
+              <div id="deviceLog" class="history"></div>
+              <div class="pager">
+                <button id="deviceLogPrevBtn" class="secondary small" type="button">Prev</button>
+                <span id="deviceLogPageInfo" class="pager-info">Page 1</span>
+                <button id="deviceLogNextBtn" class="secondary small" type="button">Next</button>
               </div>
             </section>
 
