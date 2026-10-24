@@ -68,7 +68,11 @@ const server = http.createServer((req, res) => {
     }
 
     const ext = path.extname(filePath);
-    res.writeHead(200, { "Content-Type": MIME_TYPES[ext] || "text/plain; charset=utf-8" });
+    // no-cache makes browsers re-fetch after an update instead of running stale app.js/index.html.
+    res.writeHead(200, {
+      "Content-Type": MIME_TYPES[ext] || "text/plain; charset=utf-8",
+      "Cache-Control": "no-cache",
+    });
     res.end(data);
   });
 });
