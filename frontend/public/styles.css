@@ -18,6 +18,9 @@
 
 * { box-sizing: border-box; }
 
+/* Form controls do not inherit the page font by default. */
+input, select, textarea, button { font-family: inherit; }
+
 body {
   margin: 0;
   font-family: "Plus Jakarta Sans", "Segoe UI", "Aptos", Tahoma, sans-serif;
@@ -1237,63 +1240,6 @@ select:focus {
   animation: panelIn 0.22s ease-out;
 }
 
-#adminPanelModal .row.between:first-child h3 {
-  font-size: 22px;
-  color: #293240;
-}
-
-#adminPanelModal .row.between:first-child + .muted {
-  font-size: 16px;
-  margin-bottom: 16px;
-}
-
-#adminPanelModal .row.between:first-child .row {
-  gap: 10px;
-}
-
-#adminPanelModal .row.between:first-child .secondary.small {
-  border-radius: 14px;
-  padding: 10px 18px;
-  background: linear-gradient(120deg, #506672, #5f7480);
-  font-size: 14px;
-}
-
-#adminPanelModal .admin-view-pane[data-admin-view="summary"] > h3 {
-  margin-bottom: 4px;
-  font-size: 20px;
-  color: #144f63;
-}
-
-#adminPanelModal #summaryTable.history {
-  margin-top: 2px;
-}
-
-#adminPanelModal #summaryPageInfo {
-  font-size: 16px;
-}
-
-#adminPanelModal #summaryPrevBtn,
-#adminPanelModal #summaryNextBtn {
-  min-width: 64px;
-  border-radius: 14px;
-  padding: 10px 16px;
-}
-
-.admin-modal-card.summary-mode .admin-panel-grid {
-  grid-template-columns: 1fr;
-}
-
-.admin-modal-card.summary-mode .admin-view-pane[data-admin-view="summary"] {
-  grid-column: 1 / -1;
-}
-
-.admin-modal-card.summary-mode #summaryTable.history {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  overflow: auto;
-}
-
 @keyframes panelIn {
   from { transform: translateY(12px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
@@ -1317,85 +1263,7 @@ select:focus {
   }
 
   .admin-modal-card {
-    width: min(96vw, 1360px);
-    height: 92vh;
-    max-height: 92vh;
-    padding: 22px 24px;
     border-radius: 20px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .admin-panel-grid {
-    grid-template-columns: minmax(320px, 420px) minmax(360px, 1fr);
-    align-items: start;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .admin-panel-section:nth-child(3) {
-    grid-column: 1 / -1;
-  }
-
-  .summary-grid {
-    grid-template-columns: minmax(220px, 2fr) minmax(140px, 1fr) repeat(4, minmax(92px, 0.7fr));
-  }
-
-  .admin-view-pane {
-    min-height: 0;
-    overflow: auto;
-  }
-
-  .admin-panel-section {
-    min-width: 0;
-  }
-
-  #adminPanelModal {
-    place-items: stretch;
-    padding: 0;
-  }
-
-  #adminPanelModal .admin-modal-card {
-    width: 100vw;
-    height: 100vh;
-    max-height: none;
-    border-radius: 0;
-    padding: 20px 12px 26px;
-  }
-
-  #adminPanelModal .admin-panel-grid {
-    grid-template-columns: 1fr;
-    align-items: stretch;
-  }
-
-  #adminPanelModal .admin-view-pane {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    gap: 12px;
-  }
-
-  #adminPanelModal .admin-view-pane[data-admin-view="summary"] {
-    grid-column: 1 / -1;
-  }
-
-  #adminPanelModal #summaryStats {
-    flex: 0 0 auto;
-  }
-
-  #adminPanelModal #summaryTable.history {
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
-    padding-bottom: 0;
-  }
-
-  #adminPanelModal #employeeList.history {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
   }
 
   .summary-table {
@@ -1405,11 +1273,6 @@ select:focus {
   .employee-table {
     min-width: 1620px;
   }
-
-  .summary-controls {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
 }
 
 @media (max-width: 899px) {
@@ -1422,13 +1285,6 @@ select:focus {
     width: min(96vw, 560px);
     max-height: 90vh;
   }
-
-  #adminPanelModal .admin-modal-card {
-    width: min(98vw, 760px);
-    max-height: 92vh;
-    border-radius: 18px;
-  }
-
 }
 
 .tab-count {
@@ -1507,3 +1363,527 @@ select:focus {
 #adminModal .admin-modal-card h3 {
   color: var(--primary);
 }
+
+/* Admin panel: full-screen shell with a sidebar on wide screens and scrolling tabs on phones. */
+#adminPanelModal {
+  place-items: stretch;
+  padding: 0;
+  background: rgba(9, 24, 30, 0.5);
+}
+
+#adminPanelModal .admin-shell {
+  width: 100%;
+  height: 100dvh;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--bg-1), var(--bg-2));
+  box-shadow: none;
+  animation: none;
+}
+
+.admin-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-height: 0;
+  padding: 20px 14px;
+  color: #e6f6f9;
+  background:
+    radial-gradient(260px 200px at 0% 100%, rgba(31, 122, 79, 0.3), transparent 70%),
+    linear-gradient(180deg, #0b3f4d, #0f5566);
+}
+
+.admin-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 6px;
+}
+
+.admin-brand .brand-sub { font-size: 18px; }
+
+#adminPanelModal .admin-tabs {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+#adminPanelModal .admin-view-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: rgba(230, 246, 249, 0.82);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  box-shadow: none;
+  transform: none;
+}
+
+#adminPanelModal .admin-view-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+#adminPanelModal .admin-view-btn.active {
+  background: #fff;
+  color: var(--primary);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
+}
+
+#adminPanelModal .admin-view-btn .tab-count { margin-left: auto; }
+
+.admin-sidebar-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.admin-side-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+}
+
+.admin-side-btn svg { width: 16px; height: 16px; }
+
+.admin-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 26px 30px 48px;
+}
+
+.admin-msg {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 0 16px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+  font-weight: 600;
+}
+
+.admin-msg:empty { display: none; }
+
+#adminPanelModal .admin-view-pane {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-height: 0;
+  padding: 0;
+  overflow: visible;
+}
+
+#adminPanelModal .admin-view-pane.hidden { display: none !important; }
+
+.pane-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pane-head h2 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  color: var(--primary);
+}
+
+.pane-head .muted { margin: 4px 0 0; }
+
+.pane-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  margin: 0;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--primary);
+  font-size: 13px;
+}
+
+.pane-action svg { width: 16px; height: 16px; }
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: 16px 18px 16px 22px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+}
+
+.stat-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--primary-soft);
+}
+
+.stat-good::before { background: var(--success); }
+.stat-warn::before { background: #c48412; }
+.stat-alert::before { background: var(--danger); }
+
+.stat-card span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.stat-card strong {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-card small { font-size: 12px; color: var(--muted); }
+
+.overview-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.panel-card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+  padding: 20px;
+  border-radius: 20px;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+}
+
+.panel-card h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  color: var(--primary);
+}
+
+.panel-card label {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.panel-card input,
+.panel-card textarea,
+.panel-card select { margin: 0; }
+
+.panel-card select { width: 100%; }
+.panel-card button { margin-top: 6px; }
+.panel-card .muted { margin: 0; font-size: 13px; line-height: 1.5; }
+.panel-card .msg { margin: 0; }
+.panel-card .current-ip-box { margin: 0; }
+.panel-card .report-actions button { margin: 0; }
+
+.panel-card code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #eef4f2;
+  font-size: 12px;
+}
+
+.pending-list,
+.activity-list { display: grid; gap: 8px; }
+
+.pending-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #fffbf0;
+  border: 1px solid rgba(196, 132, 18, 0.25);
+}
+
+.pending-item .who { flex: 1; min-width: 0; }
+.pending-item .who strong { display: block; font-size: 14px; }
+.pending-item .who span { display: block; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.pending-item .actions { display: flex; gap: 6px; flex-shrink: 0; }
+.pending-item button { margin: 0; }
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.activity-item:last-child { border-bottom: 0; }
+.activity-item .who { min-width: 0; }
+.activity-item .who strong { margin-right: 6px; }
+.activity-item .pin-badge { margin: 4px 0 0; }
+.activity-item .when { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+.empty-note {
+  padding: 16px;
+  border-radius: 14px;
+  background: #f6faf9;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.filter-search { position: relative; flex: 1 1 260px; }
+
+.filter-search svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  color: #94a3b8;
+}
+
+.filter-search input { margin: 0; padding: 10px 12px 10px 38px; }
+.filter-bar select { min-width: 200px; }
+.filter-bar .inline-check { margin: 0; }
+
+#adminPanelModal .summary-controls {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  align-items: end;
+  padding: 14px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+#adminPanelModal .device-log-controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+
+#adminPanelModal .summary-control label {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+#adminPanelModal .summary-control input,
+#adminPanelModal .summary-control select {
+  width: 100%;
+  margin: 0;
+  padding: 9px 10px;
+}
+
+#adminPanelModal .summary-control-actions { grid-column: auto; }
+
+#adminPanelModal .summary-control-actions button {
+  width: auto;
+  margin: 0;
+  padding: 10px 18px;
+}
+
+.summary-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+.summary-stats:empty { display: none; }
+
+.chip-stat {
+  display: grid;
+  min-width: 110px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.chip-stat span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.chip-stat strong { font-size: 18px; color: var(--text); font-variant-numeric: tabular-nums; }
+.chip-stat.wide { min-width: 220px; }
+
+#adminPanelModal .history {
+  margin: 0;
+  border-top: 0;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+}
+
+#adminPanelModal .employee-table-wrap,
+#adminPanelModal .summary-table-wrap {
+  height: auto;
+  max-height: 64vh;
+  box-shadow: var(--shadow-card);
+}
+
+#adminPanelModal .pager { margin: 0; }
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field-row label { display: block; margin-bottom: 6px; }
+
+.tool-btn { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.tool-btn svg { width: 18px; height: 18px; }
+
+.text-link {
+  justify-self: start;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary-soft);
+}
+
+.narrow-card { max-width: 480px; }
+
+@media (max-width: 1150px) {
+  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #adminPanelModal .summary-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #adminPanelModal .summary-control-actions { grid-column: 1 / -1; }
+  #adminPanelModal .summary-control-actions button { width: 100%; }
+}
+
+@media (max-width: 900px) {
+  #adminPanelModal .admin-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .admin-sidebar {
+    min-width: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .admin-brand { flex: 1; }
+  .admin-sidebar-actions { display: flex; margin: 0; }
+
+  #adminPanelModal .admin-tabs {
+    order: 3;
+    display: flex;
+    flex-wrap: nowrap;
+    width: 100%;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  #adminPanelModal .admin-view-btn {
+    width: auto;
+    padding: 9px 12px;
+    white-space: nowrap;
+  }
+
+  .admin-main { padding: 16px 14px 40px; }
+  .overview-columns,
+  .settings-grid { grid-template-columns: 1fr; }
+  .pane-head h2 { font-size: 22px; }
+}
+
+@media (max-width: 520px) {
+  .stat-grid { gap: 8px; }
+  .stat-card { padding: 12px 12px 12px 16px; }
+  .stat-card strong { font-size: 24px; }
+  .stat-card span { font-size: 10px; }
+  #adminPanelModal .device-log-controls,
+  #adminPanelModal .summary-controls { grid-template-columns: 1fr; }
+  .filter-bar select { width: 100%; }
+  .admin-side-btn { padding: 9px 10px; }
+  .pending-item { flex-wrap: wrap; }
+  .pending-item .actions { width: 100%; }
+  .pending-item .actions button { flex: 1; }
+  .field-row { grid-template-columns: 1fr; }
+}
+
+/* Grid children default to their content width; let wide tables scroll inside their own box. */
+#adminPanelModal .admin-view-pane { grid-template-columns: minmax(0, 1fr); }
+
+#adminPanelModal .employee-table.compact-table {
+  width: 100%;
+  min-width: 920px;
+}
+
+#adminPanelModal .compact-table tbody td {
+  padding: 12px 14px;
+  white-space: normal;
+  vertical-align: top;
+}
+
+#adminPanelModal .compact-table .employee-name-cell strong { font-size: 14px; }
+#adminPanelModal .compact-table .employee-subtext { margin-top: 3px; }
+#adminPanelModal .compact-table .pin-badge { margin-top: 0; }
+
+#adminPanelModal .compact-table .employee-actions-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+#adminPanelModal .compact-table .employee-actions-cell button { margin: 0; }

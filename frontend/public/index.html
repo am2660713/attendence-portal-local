@@ -164,133 +164,110 @@
       </section>
 
       <section class="admin-modal hidden" id="adminPanelModal">
-        <div class="admin-modal-card">
-          <div class="row between">
-            <h3>Admin Panel</h3>
-            <div class="row">
-              <button id="closeAdminPanelBtn" class="secondary small" type="button">Close</button>
-              <button id="lockAdminBtn" class="secondary small" type="button">Lock</button>
+        <div class="admin-modal-card admin-shell">
+          <aside class="admin-sidebar">
+            <div class="admin-brand">
+              <span class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+              </span>
+              <div>
+                <p class="brand-name">ICT Solutions</p>
+                <p class="brand-sub">Admin</p>
+              </div>
             </div>
-          </div>
-          <p class="muted">Add employees and view all registered users.</p>
-          <div class="admin-tabs" role="tablist" aria-label="Admin panel sections">
-            <button class="admin-view-btn active" type="button" data-admin-view-btn="tools">Employee Tools</button>
-            <button class="admin-view-btn" type="button" data-admin-view-btn="summary">HR Summary</button>
-            <button class="admin-view-btn" type="button" data-admin-view-btn="list">Employee List <span id="pendingDevicesBadge" class="tab-count hidden"></span></button>
-            <button class="admin-view-btn" type="button" data-admin-view-btn="devices">Device Log</button>
-            <button class="admin-view-btn" type="button" data-admin-view-btn="security">Change Password</button>
-          </div>
-          <div class="admin-panel-grid">
-            <section class="admin-panel-section admin-view-pane" data-admin-view="tools">
-              <h3>Employee Tools</h3>
-              <label for="newEmployeeId">Employee ID</label>
-              <input id="newEmployeeId" placeholder="EMP004" />
-              <label for="newEmployeeName">Employee Name</label>
-              <input id="newEmployeeName" placeholder="Neha Patil" />
-              <label for="newEmployeeDepartment">Department</label>
-              <select id="newEmployeeDepartment">
-                <option value="">Select department</option>
-                <option value="Software">Software</option>
-                <option value="Hardware">Hardware</option>
-                <option value="Graphics">Graphics</option>
-                <option value="Admin">Admin</option>
-                <option value="Estimation">Estimation</option>
-                <option value="Clockworks">Clockworks</option>
-                <option value="Human Resources">Human Resources</option>
-              </select>
-              <button id="addEmployeeBtn" class="primary" type="button">Add Employee</button>
-              <button id="importEmployeesBtn" class="secondary full" type="button">Import Employees Excel/CSV</button>
-              <input id="importEmployeesInput" type="file" accept=".csv,text/csv" class="hidden" />
-              <button id="exportAttendanceBtn" class="secondary full" type="button">Download Attendance Excel</button>
-              <p id="adminMsg" class="msg"></p>
+            <nav class="admin-tabs" role="tablist" aria-label="Admin panel sections">
+              <button class="admin-view-btn active" type="button" data-admin-view-btn="overview">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+                <span>Overview</span>
+              </button>
+              <button class="admin-view-btn" type="button" data-admin-view-btn="list">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14c2.2.6 3.5 2.8 3.5 6"/></svg>
+                <span>Employees</span>
+                <span id="pendingDevicesBadge" class="tab-count hidden"></span>
+              </button>
+              <button class="admin-view-btn" type="button" data-admin-view-btn="summary">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
+                <span>HR Summary</span>
+              </button>
+              <button class="admin-view-btn" type="button" data-admin-view-btn="devices">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>
+                <span>Device Log</span>
+              </button>
+              <button class="admin-view-btn" type="button" data-admin-view-btn="tools">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+                <span>Tools &amp; Settings</span>
+              </button>
+              <button class="admin-view-btn" type="button" data-admin-view-btn="security">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+                <span>Password</span>
+              </button>
+            </nav>
+            <div class="admin-sidebar-actions">
+              <button id="lockAdminBtn" class="admin-side-btn" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+                Lock
+              </button>
+              <button id="closeAdminPanelBtn" class="admin-side-btn" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                Close
+              </button>
+            </div>
+          </aside>
 
-              <div class="admin-subsection">
-                <h3>Office Location</h3>
-                <label for="officeName">Office Name</label>
-                <input id="officeName" placeholder="Main Office" />
-                <label for="officeLatitude">Latitude</label>
-                <input id="officeLatitude" type="number" step="any" placeholder="18.574619" />
-                <label for="officeLongitude">Longitude</label>
-                <input id="officeLongitude" type="number" step="any" placeholder="73.954673" />
-                <label for="officeRadius">Radius in meters</label>
-                <input id="officeRadius" type="number" step="1" min="10" max="5000" placeholder="150" />
-                <label for="officeAllowedIps">Allowed Office IPs</label>
-                <div class="current-ip-box">
-                  <span>Current IP</span>
-                  <strong id="currentOfficeIp">Unlock admin to view</strong>
-                  <button id="addCurrentIpBtn" class="mini-secondary" type="button">Add Current IP</button>
-                </div>
-                <textarea id="officeAllowedIps" rows="4" placeholder="203.0.113.10&#10;203.0.113.11"></textarea>
-                <button id="saveOfficeLocationBtn" class="secondary full" type="button">Save Office Location</button>
-                <p id="officeLocationMsg" class="msg"></p>
-              </div>
+          <div class="admin-main">
+            <p id="adminMsg" class="msg admin-msg" role="status"></p>
 
-              <div class="admin-subsection">
-                <h3>Monthly Email Report</h3>
-                <p class="muted">Send employee monthly attendance CSV to HR/Admin email.</p>
-                <label for="reportEmails">HR/Admin Emails</label>
-                <textarea id="reportEmails" rows="3" placeholder="hr@company.com&#10;admin@company.com"></textarea>
-                <div class="report-actions">
-                  <button id="saveReportEmailsBtn" class="secondary full" type="button">Save Report Emails</button>
-                  <button id="sendMonthlyReportBtn" class="primary" type="button">Send Previous Month Report</button>
+            <section class="admin-view-pane" data-admin-view="overview">
+              <header class="pane-head">
+                <div>
+                  <h2>Overview</h2>
+                  <p class="muted" id="overviewDate">Today at a glance</p>
                 </div>
-                <p id="reportEmailStatus" class="muted"></p>
-                <p id="reportEmailMsg" class="msg"></p>
+                <button id="refreshOverviewBtn" class="pane-action" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>
+                  Refresh
+                </button>
+              </header>
+              <div class="stat-grid">
+                <div class="stat-card"><span>Employees</span><strong id="ovEmployees">–</strong><small>Active staff</small></div>
+                <div class="stat-card stat-good"><span>Present today</span><strong id="ovPresent">–</strong><small id="ovPresentSub">checked in</small></div>
+                <div class="stat-card"><span>Checked out</span><strong id="ovCheckedOut">–</strong><small>finished the day</small></div>
+                <div class="stat-card stat-warn"><span>Late today</span><strong id="ovLate">–</strong><small>after grace time</small></div>
+                <div class="stat-card"><span>Working from home</span><strong id="ovWfh">–</strong><small>today</small></div>
+                <div class="stat-card stat-alert"><span>Laptops to approve</span><strong id="ovPending">–</strong><small>waiting for HR</small></div>
               </div>
-            </section>
-
-            <section class="admin-panel-section admin-view-pane hidden" data-admin-view="summary">
-              <h3>HR Monthly Summary</h3>
-              <div class="summary-controls">
-                <div class="summary-control">
-                  <label for="summaryMonth">Month</label>
-                  <input id="summaryMonth" type="month" />
+              <div class="overview-columns">
+                <div class="panel-card">
+                  <h3>Laptops waiting for approval</h3>
+                  <div id="ovPendingList" class="pending-list"></div>
                 </div>
-                <div class="summary-control">
-                  <label for="summarySearch">Search employee</label>
-                  <input id="summarySearch" placeholder="Search by name or ID" />
+                <div class="panel-card">
+                  <h3>Recent device activity</h3>
+                  <div id="ovRecentEvents" class="activity-list"></div>
                 </div>
-                <div class="summary-control">
-                  <label for="summaryDepartment">Department</label>
-                  <select id="summaryDepartment">
-                    <option value="All">All departments</option>
-                    <option value="Software">Software</option>
-                    <option value="Hardware">Hardware</option>
-                    <option value="Graphics">Graphics</option>
-                    <option value="Admin">Admin</option>
-                    <option value="Estimation">Estimation</option>
-                    <option value="Clockworks">Clockworks</option>
-                    <option value="Human Resources">Human Resources</option>
-                  </select>
-                </div>
-                <div class="summary-control">
-                  <label for="summaryPageSize">Rows per page</label>
-                  <select id="summaryPageSize">
-                    <option value="all" selected>All</option>
-                    <option value="10">10</option>
-                    <option value="20">20</option>
-                  </select>
-                </div>
-                <div class="summary-control summary-control-actions">
-                  <button id="loadSummaryBtn" class="secondary full" type="button">Apply Filters</button>
-                </div>
-              </div>
-              <div id="summaryStats" class="status"></div>
-              <div id="summaryTable" class="history"></div>
-              <div class="pager">
-                <button id="summaryPrevBtn" class="secondary small" type="button">Prev</button>
-                <span id="summaryPageInfo" class="pager-info">Page 1</span>
-                <button id="summaryNextBtn" class="secondary small" type="button">Next</button>
               </div>
             </section>
 
-            <section class="admin-panel-section admin-view-pane hidden full-width" data-admin-view="list">
-              <h3>Employee List</h3>
-              <p class="muted">Shows all employee details in one table. New laptops must be approved before the employee can log in.</p>
-              <label class="inline-check" for="pendingOnlyToggle">
-                <input id="pendingOnlyToggle" type="checkbox" />
-                Show only laptops waiting for approval
-              </label>
+            <section class="admin-view-pane hidden" data-admin-view="list">
+              <header class="pane-head">
+                <div>
+                  <h2>Employees</h2>
+                  <p class="muted">Approve new laptops, manage WFH access, reset laptops and remove employees.</p>
+                </div>
+              </header>
+              <div class="filter-bar">
+                <div class="filter-search">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                  <input id="employeeSearch" placeholder="Search by name or ID" />
+                </div>
+                <select id="employeeDepartmentFilter" aria-label="Filter by department">
+                  <option value="All">All departments</option>
+                </select>
+                <label class="inline-check" for="pendingOnlyToggle">
+                  <input id="pendingOnlyToggle" type="checkbox" />
+                  Only laptops waiting for approval
+                </label>
+              </div>
               <div id="employeeList" class="history"></div>
               <div class="pager">
                 <label for="employeePageSize" class="pager-label">Rows per page</label>
@@ -305,9 +282,56 @@
               </div>
             </section>
 
-            <section class="admin-panel-section admin-view-pane hidden full-width" data-admin-view="devices">
-              <h3>Device Log</h3>
-              <p class="muted">Every laptop login, approval request, blocked attempt, and reset, newest first.</p>
+            <section class="admin-view-pane hidden" data-admin-view="summary">
+              <header class="pane-head">
+                <div>
+                  <h2>HR Monthly Summary</h2>
+                  <p class="muted">Attendance, late marks and overtime per employee for a month.</p>
+                </div>
+              </header>
+              <div class="summary-controls">
+                <div class="summary-control">
+                  <label for="summaryMonth">Month</label>
+                  <input id="summaryMonth" type="month" />
+                </div>
+                <div class="summary-control">
+                  <label for="summarySearch">Search employee</label>
+                  <input id="summarySearch" placeholder="Search by name or ID" />
+                </div>
+                <div class="summary-control">
+                  <label for="summaryDepartment">Department</label>
+                  <select id="summaryDepartment">
+                    <option value="All">All departments</option>
+                  </select>
+                </div>
+                <div class="summary-control">
+                  <label for="summaryPageSize">Rows per page</label>
+                  <select id="summaryPageSize">
+                    <option value="all" selected>All</option>
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                  </select>
+                </div>
+                <div class="summary-control summary-control-actions">
+                  <button id="loadSummaryBtn" class="primary" type="button">Apply Filters</button>
+                </div>
+              </div>
+              <div id="summaryStats" class="summary-stats"></div>
+              <div id="summaryTable" class="history"></div>
+              <div class="pager">
+                <button id="summaryPrevBtn" class="secondary small" type="button">Prev</button>
+                <span id="summaryPageInfo" class="pager-info">Page 1</span>
+                <button id="summaryNextBtn" class="secondary small" type="button">Next</button>
+              </div>
+            </section>
+
+            <section class="admin-view-pane hidden" data-admin-view="devices">
+              <header class="pane-head">
+                <div>
+                  <h2>Device Log</h2>
+                  <p class="muted">Every laptop login, approval request, blocked attempt and reset, newest first.</p>
+                </div>
+              </header>
               <div class="summary-controls device-log-controls">
                 <div class="summary-control">
                   <label for="deviceLogEmployee">Employee ID</label>
@@ -329,7 +353,7 @@
                   </select>
                 </div>
                 <div class="summary-control summary-control-actions">
-                  <button id="loadDeviceLogBtn" class="secondary full" type="button">Apply Filters</button>
+                  <button id="loadDeviceLogBtn" class="primary" type="button">Apply Filters</button>
                 </div>
               </div>
               <div id="deviceLog" class="history"></div>
@@ -340,23 +364,106 @@
               </div>
             </section>
 
-            <section class="admin-panel-section admin-view-pane hidden" data-admin-view="security">
-              <h3>Change Password</h3>
-              <p class="muted">Update the admin password from here. Changes apply immediately.</p>
-              <label for="currentAdminPassword">Current Password</label>
-              <div class="password-field">
-                <input id="currentAdminPassword" type="password" placeholder="Current password" />
-                <button id="toggleCurrentAdminPasswordBtn" class="password-toggle" type="button" aria-label="Show current password">Show</button>
+            <section class="admin-view-pane hidden" data-admin-view="tools">
+              <header class="pane-head">
+                <div>
+                  <h2>Tools &amp; Settings</h2>
+                  <p class="muted">Add employees, import or export data, and configure the office and reports.</p>
+                </div>
+              </header>
+              <div class="settings-grid">
+                <div class="panel-card">
+                  <h3>Add employee</h3>
+                  <label for="newEmployeeId">Employee ID</label>
+                  <input id="newEmployeeId" placeholder="ICT0200" />
+                  <label for="newEmployeeName">Employee name</label>
+                  <input id="newEmployeeName" placeholder="Neha Patil" />
+                  <label for="newEmployeeDepartment">Department</label>
+                  <input id="newEmployeeDepartment" list="departmentOptions" placeholder="Choose or type a department" />
+                  <datalist id="departmentOptions"></datalist>
+                  <button id="addEmployeeBtn" class="primary" type="button">Add Employee</button>
+                </div>
+
+                <div class="panel-card">
+                  <h3>Import &amp; export</h3>
+                  <p class="muted">Import a CSV with <code>id</code>, <code>name</code> and <code>department</code> columns. Existing IDs are updated.</p>
+                  <button id="importEmployeesBtn" class="secondary full tool-btn" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
+                    Import employees (CSV)
+                  </button>
+                  <input id="importEmployeesInput" type="file" accept=".csv,text/csv" class="hidden" />
+                  <a class="text-link" href="/sample-employees.csv" download>Download sample CSV</a>
+                  <button id="exportAttendanceBtn" class="secondary full tool-btn" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M4 21h16"/></svg>
+                    Download attendance (CSV)
+                  </button>
+                </div>
+
+                <div class="panel-card">
+                  <h3>Office location</h3>
+                  <label for="officeName">Office name</label>
+                  <input id="officeName" placeholder="Main Office" />
+                  <div class="field-row">
+                    <div>
+                      <label for="officeLatitude">Latitude</label>
+                      <input id="officeLatitude" type="number" step="any" placeholder="18.574619" />
+                    </div>
+                    <div>
+                      <label for="officeLongitude">Longitude</label>
+                      <input id="officeLongitude" type="number" step="any" placeholder="73.954673" />
+                    </div>
+                  </div>
+                  <label for="officeRadius">Radius in meters</label>
+                  <input id="officeRadius" type="number" step="1" min="10" max="5000" placeholder="150" />
+                  <label for="officeAllowedIps">Allowed office IPs</label>
+                  <div class="current-ip-box">
+                    <span>Current IP</span>
+                    <strong id="currentOfficeIp">Unlock admin to view</strong>
+                    <button id="addCurrentIpBtn" class="mini-secondary" type="button">Add current IP</button>
+                  </div>
+                  <textarea id="officeAllowedIps" rows="3" placeholder="203.0.113.10&#10;203.0.113.11"></textarea>
+                  <button id="saveOfficeLocationBtn" class="primary" type="button">Save Office Location</button>
+                  <p id="officeLocationMsg" class="msg"></p>
+                </div>
+
+                <div class="panel-card">
+                  <h3>Monthly email report</h3>
+                  <p class="muted">Send the monthly attendance CSV to HR/Admin.</p>
+                  <label for="reportEmails">HR/Admin emails</label>
+                  <textarea id="reportEmails" rows="3" placeholder="hr@company.com&#10;admin@company.com"></textarea>
+                  <div class="report-actions">
+                    <button id="saveReportEmailsBtn" class="secondary full" type="button">Save Report Emails</button>
+                    <button id="sendMonthlyReportBtn" class="primary" type="button">Send Previous Month Report</button>
+                  </div>
+                  <p id="reportEmailStatus" class="muted"></p>
+                  <p id="reportEmailMsg" class="msg"></p>
+                </div>
               </div>
-              <label for="newAdminPassword">New Password</label>
-              <div class="password-field">
-                <input id="newAdminPassword" type="password" placeholder="New password" />
-                <button id="toggleNewAdminPasswordBtn" class="password-toggle" type="button" aria-label="Show new password">Show</button>
+            </section>
+
+            <section class="admin-view-pane hidden" data-admin-view="security">
+              <header class="pane-head">
+                <div>
+                  <h2>Change Password</h2>
+                  <p class="muted">Update the admin password. Other admin sessions are signed out.</p>
+                </div>
+              </header>
+              <div class="panel-card narrow-card">
+                <label for="currentAdminPassword">Current password</label>
+                <div class="password-field">
+                  <input id="currentAdminPassword" type="password" placeholder="Current password" />
+                  <button id="toggleCurrentAdminPasswordBtn" class="password-toggle" type="button" aria-label="Show current password">Show</button>
+                </div>
+                <label for="newAdminPassword">New password</label>
+                <div class="password-field">
+                  <input id="newAdminPassword" type="password" placeholder="At least 6 characters" />
+                  <button id="toggleNewAdminPasswordBtn" class="password-toggle" type="button" aria-label="Show new password">Show</button>
+                </div>
+                <label for="confirmAdminPassword">Confirm new password</label>
+                <input id="confirmAdminPassword" type="password" placeholder="Confirm new password" />
+                <button id="changeAdminPasswordBtn" class="primary" type="button">Change Admin Password</button>
+                <p id="changeAdminPasswordMsg" class="msg"></p>
               </div>
-              <label for="confirmAdminPassword">Confirm New Password</label>
-              <input id="confirmAdminPassword" type="password" placeholder="Confirm new password" />
-              <button id="changeAdminPasswordBtn" class="primary" type="button">Change Admin Password</button>
-              <p id="changeAdminPasswordMsg" class="msg"></p>
             </section>
           </div>
         </div>

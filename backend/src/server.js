@@ -725,6 +725,77 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/admin/overview") {
+      if (!requireAdminSession(req, res, corsOrigin)) return;
+      const today = getISTDate();
+      const config = await readConfig();
+      const [employeesRes, attendanceRes, pendingRes, eventsRes] = await Promise.all([
+        query("SELECT COUNT(*)::int AS count FROM employees WHERE active = true"),
+        query(
+          `SELECT a.attendance_date, a.check_in_at, a.check_out_at, a.work_mode
+           FROM attendance a
+           JOIN employees e ON e.id = a.employee_id AND e.active = true
+           WHERE a.attendance_date = $1`,
+          [today]
+        ),
+        query(
+          `SELECT id, name, department, device_label, device_bound_at
+           FROM employees
+           WHERE active = true AND device_status = 'pending'
+           ORDER BY device_bound_at ASC NULLS LAST
+           LIMIT 20`
+        ),
+        query(
+          `SELECT d.employee_id, e.name, d.event_type, d.device_label, d.created_at
+           FROM device_events d
+           LEFT JOIN employees e ON e.id = d.employee_id
+           ORDER BY d.created_at DESC, d.id DESC
+           LIMIT 6`
+        ),
+      ]);
+      const rows = attendanceRes.rows;
+      sendJson(
+        res,
+        200,
+        {
+          today,
+          stats: {
+            employees: employeesRes.rows[0].count,
+            present: rows.length,
+            checkedOut: rows.filter((row) => row.check_out_at).length,
+            wfh: rows.filter((row) => normalizeWorkMode(row.work_mode) === "WFH").length,
+            late: rows.filter((row) => buildDailyMetrics(row, config).lateMark).length,
+            pendingDevices: pendingRes.rows.length,
+          },
+          pending: pendingRes.rows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            department: row.department,
+            deviceLabel: row.device_label || "",
+            requestedAt: row.device_bound_at ? toISTDateTime(new Date(row.device_bound_at).getTime()) : null,
+          })),
+          recentEvents: eventsRes.rows.map((row) => ({
+            employeeId: row.employee_id,
+            name: row.name || "",
+            eventType: row.event_type,
+            deviceLabel: row.device_label || "",
+            createdAt: toISTDateTime(new Date(row.created_at).getTime()),
+          })),
+        },
+        corsOrigin
+      );
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/admin/departments") {
+      if (!requireAdminSession(req, res, corsOrigin)) return;
+      const departmentsRes = await query(
+        "SELECT DISTINCT department FROM employees WHERE active = true AND department <> '' ORDER BY department"
+      );
+      sendJson(res, 200, { departments: departmentsRes.rows.map((row) => row.department) }, corsOrigin);
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/admin/report-settings") {
       if (!requireAdminSession(req, res, corsOrigin)) return;
       const settings = await getReportSettings();

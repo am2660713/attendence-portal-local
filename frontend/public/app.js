@@ -85,6 +85,13 @@ const deviceLogEl = document.getElementById("deviceLog");
 const deviceLogPrevBtn = document.getElementById("deviceLogPrevBtn");
 const deviceLogNextBtn = document.getElementById("deviceLogNextBtn");
 const deviceLogPageInfo = document.getElementById("deviceLogPageInfo");
+const employeeSearchInput = document.getElementById("employeeSearch");
+const employeeDepartmentFilter = document.getElementById("employeeDepartmentFilter");
+const departmentOptions = document.getElementById("departmentOptions");
+const overviewDate = document.getElementById("overviewDate");
+const refreshOverviewBtn = document.getElementById("refreshOverviewBtn");
+const ovPendingList = document.getElementById("ovPendingList");
+const ovRecentEvents = document.getElementById("ovRecentEvents");
 const adminViewButtons = document.querySelectorAll("[data-admin-view-btn]");
 const adminViewPanes = document.querySelectorAll("[data-admin-view]");
 
@@ -93,7 +100,7 @@ let employeeToken = localStorage.getItem("attendanceEmployeeToken") || null;
 localStorage.removeItem("adminUnlocked");
 let adminUnlocked = false;
 let adminToken = null;
-let activeAdminView = "tools";
+let activeAdminView = "overview";
 let summaryPage = 1;
 let summaryTotalPages = 1;
 let employeePage = 1;
@@ -167,9 +174,15 @@ if (summaryMonth) {
   summaryMonth.value = getISTMonthValue();
 }
 
+let adminMsgTimer = null;
 const setMessage = (el, text, ok = false) => {
   el.textContent = text;
   el.style.color = ok ? "#0f766e" : "#b91c1c";
+  // The admin bar sits above every admin view, so let success notes fade out on their own.
+  if (el === adminMsg) {
+    clearTimeout(adminMsgTimer);
+    if (ok && text) adminMsgTimer = setTimeout(() => { adminMsg.textContent = ""; }, 6000);
+  }
 };
 
 const escapeHtml = (value) =>
@@ -368,7 +381,9 @@ const setAdminView = (view) => {
     pane.classList.toggle("hidden", pane.dataset.adminView !== view);
   });
 
-  if (view === "summary") {
+  if (view === "overview") {
+    renderOverview();
+  } else if (view === "summary") {
     summaryPage = 1;
     renderSummary();
   } else if (view === "list") {
@@ -474,10 +489,17 @@ const updatePendingDevicesBadge = (count) => {
 };
 
 const renderLaptopStatus = (emp) => {
-  const label = emp.deviceLabel ? `: ${escapeHtml(emp.deviceLabel)}` : "";
-  if (emp.deviceStatus === "pending") return `<span class="pin-badge pending-badge">Waiting for approval${label}</span>`;
-  if (emp.deviceStatus === "approved") return `<span class="pin-badge success-badge">Approved company laptop${label}</span>`;
-  return `<span class="pin-badge">Laptop not bound yet</span>`;
+  if (emp.deviceStatus === "none") return `<span class="pin-badge">Not bound yet</span>`;
+  const badge = emp.deviceStatus === "pending"
+    ? `<span class="pin-badge pending-badge">Waiting for approval</span>`
+    : `<span class="pin-badge success-badge">Approved</span>`;
+  const boundAt = emp.device_bound_at
+    ? new Date(emp.device_bound_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" })
+    : "";
+  const extra = emp.linkedBrowsers ? ` · +${emp.linkedBrowsers} browser${emp.linkedBrowsers === 1 ? "" : "s"}` : "";
+  return `${badge}
+    <span class="employee-subtext">${escapeHtml(emp.deviceLabel || "Unknown laptop")}${extra}</span>
+    ${boundAt ? `<span class="employee-subtext">${emp.deviceStatus === "pending" ? "Requested" : "Since"} ${escapeHtml(boundAt)}</span>` : ""}`;
 };
 
 const DEVICE_EVENT_LABELS = {
@@ -546,6 +568,100 @@ const renderDeviceLog = async () => {
   }
 };
 
+const setStat = (id, value) => {
+  const el = document.getElementById(id);
+  if (el) el.textContent = String(value);
+};
+
+const renderOverview = async () => {
+  if (!ovPendingList || !adminUnlocked || !adminToken) return;
+  try {
+    const data = await callApi("/admin/overview", "GET", undefined, { "x-admin-token": adminToken || "" });
+    const stats = data.stats || {};
+    const notIn = Math.max(0, Number(stats.employees || 0) - Number(stats.present || 0));
+    if (overviewDate) overviewDate.textContent = `Today at a glance · ${formatLongDate(data.today)}`;
+    setStat("ovEmployees", stats.employees ?? 0);
+    setStat("ovPresent", stats.present ?? 0);
+    setStat("ovPresentSub", `${notIn} not checked in yet`);
+    setStat("ovCheckedOut", stats.checkedOut ?? 0);
+    setStat("ovLate", stats.late ?? 0);
+    setStat("ovWfh", stats.wfh ?? 0);
+    setStat("ovPending", stats.pendingDevices ?? 0);
+    updatePendingDevicesBadge(Number(stats.pendingDevices || 0));
+
+    const pending = Array.isArray(data.pending) ? data.pending : [];
+    ovPendingList.innerHTML = pending.length
+      ? pending
+          .map(
+            (item) => `
+              <div class="pending-item">
+                <div class="who">
+                  <strong>${escapeHtml(item.name)} · ${escapeHtml(item.id)}</strong>
+                  <span>${escapeHtml(item.department)} · ${escapeHtml(item.deviceLabel || "Unknown laptop")}</span>
+                  ${item.requestedAt ? `<span>Requested ${escapeHtml(item.requestedAt)}</span>` : ""}
+                </div>
+                <div class="actions">
+                  <button class="mini-approve approve-device-btn" data-employee-id="${escapeHtml(item.id)}" type="button">Approve</button>
+                  <button class="mini-danger reject-device-btn" data-employee-id="${escapeHtml(item.id)}" type="button">Reject</button>
+                </div>
+              </div>`
+          )
+          .join("")
+      : "<p class='empty-note'>No laptops are waiting for approval.</p>";
+
+    const events = Array.isArray(data.recentEvents) ? data.recentEvents : [];
+    ovRecentEvents.innerHTML = events.length
+      ? events
+          .map((event) => {
+            const [label, badgeClass] = DEVICE_EVENT_LABELS[event.eventType] || [event.eventType, ""];
+            return `
+              <div class="activity-item">
+                <div class="who">
+                  <strong>${escapeHtml(event.employeeId)}</strong>${escapeHtml(event.name)}
+                  <div><span class="pin-badge ${badgeClass}">${escapeHtml(label)}</span></div>
+                </div>
+                <span class="when">${escapeHtml(event.createdAt)}</span>
+              </div>`;
+          })
+          .join("")
+      : "<p class='empty-note'>No device activity yet.</p>";
+  } catch (error) {
+    setMessage(adminMsg, error.message);
+  }
+};
+
+// Department lists come from the employees on record, so imported departments are always selectable.
+const loadDepartments = async () => {
+  if (!adminUnlocked || !adminToken) return;
+  try {
+    const data = await callApi("/admin/departments", "GET", undefined, { "x-admin-token": adminToken || "" });
+    const departments = Array.isArray(data.departments) ? data.departments : [];
+    const options = departments.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+    [summaryDepartmentFilter, employeeDepartmentFilter].forEach((select) => {
+      if (!select) return;
+      const selected = select.value;
+      select.innerHTML = `<option value="All">All departments</option>${options}`;
+      select.value = departments.includes(selected) ? selected : "All";
+    });
+    if (departmentOptions) departmentOptions.innerHTML = options;
+  } catch (error) {
+    setMessage(adminMsg, error.message);
+  }
+};
+
+const refreshAfterEmployeeChange = async () => {
+  const tasks = [renderOverview(), loadDepartments()];
+  if (activeAdminView === "list") tasks.push(renderEmployees());
+  if (activeAdminView === "summary") tasks.push(renderSummary());
+  await Promise.all(tasks);
+};
+
+let employeeSearchTimer = null;
+const applyEmployeeFilters = () => {
+  employeePage = 1;
+  renderEmployees().catch((error) => setMessage(adminMsg, error.message));
+};
+
 const renderEmployees = async () => {
   const pageSize = String(employeePageSize?.value || "10");
   const params = new URLSearchParams({
@@ -553,6 +669,10 @@ const renderEmployees = async () => {
     pageSize,
   });
   if (pendingOnlyToggle?.checked) params.set("deviceStatus", "pending");
+  const search = String(employeeSearchInput?.value || "").trim();
+  const department = String(employeeDepartmentFilter?.value || "All");
+  if (search) params.set("search", search);
+  if (department !== "All") params.set("department", department);
   const data = await callApi(`/employees?${params.toString()}`, "GET", undefined, {
     "x-admin-token": adminToken || "",
   });
@@ -563,8 +683,8 @@ const renderEmployees = async () => {
 
   if (!pageItems.length) {
     employeeList.innerHTML = pendingOnlyToggle?.checked
-      ? "<p class='muted'>No laptops are waiting for approval.</p>"
-      : "<p class='muted'>No employees found.</p>";
+      ? "<p class='empty-note'>No laptops are waiting for approval.</p>"
+      : "<p class='empty-note'>No employees match these filters.</p>";
     if (employeePageInfo) employeePageInfo.textContent = `Page ${employeePage} of ${employeeTotalPages}`;
     if (employeePrevBtn) employeePrevBtn.disabled = employeePage <= 1;
     if (employeeNextBtn) employeeNextBtn.disabled = employeePage >= employeeTotalPages;
@@ -573,26 +693,18 @@ const renderEmployees = async () => {
 
   employeeList.innerHTML = `
     <div class="employee-table-wrap">
-      <table class="employee-table">
+      <table class="employee-table compact-table">
         <colgroup>
-          <col style="width: 140px" />
-          <col style="width: 240px" />
-          <col style="width: 190px" />
-          <col style="width: 320px" />
-          <col style="width: 200px" />
-          <col style="width: 200px" />
-          <col style="width: 180px" />
-          <col style="width: 280px" />
+          <col style="width: 30%" />
+          <col style="width: 30%" />
+          <col style="width: 12%" />
+          <col style="width: 28%" />
         </colgroup>
         <thead>
           <tr>
-            <th>Employee ID</th>
-            <th>Employee Name</th>
-            <th>Department</th>
-            <th>Laptop Status</th>
-            <th>Device Label</th>
-            <th>Bound At</th>
-            <th>WFH Access</th>
+            <th>Employee</th>
+            <th>Laptop</th>
+            <th>WFH</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -601,32 +713,27 @@ const renderEmployees = async () => {
             .map(
               (emp) => `
                 <tr data-employee-id="${escapeHtml(emp.id)}">
-                  <td><span class="employee-code standalone">${escapeHtml(emp.id)}</span></td>
                   <td class="employee-name-cell">
                     <strong>${escapeHtml(emp.name)}</strong>
-                    <span class="employee-subtext">${escapeHtml(emp.department)}</span>
+                    <span class="employee-subtext">${escapeHtml(emp.id)} · ${escapeHtml(emp.department)}</span>
                   </td>
-                  <td>${escapeHtml(emp.department)}</td>
                   <td>${renderLaptopStatus(emp)}</td>
                   <td>
-                    ${escapeHtml(emp.deviceLabel || "—")}
-                    ${emp.linkedBrowsers ? `<span class="employee-subtext">+ ${emp.linkedBrowsers} more browser${emp.linkedBrowsers === 1 ? "" : "s"} on this laptop</span>` : ""}
-                  </td>
-                  <td>${emp.device_bound_at ? new Date(emp.device_bound_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }) : "—"}</td>
-                  <td>
-                    <span class="pin-badge ${emp.wfhAllowed ? "success-badge" : "warning-badge"}">
-                      ${emp.wfhAllowed ? "WFH allowed" : "WFH blocked"}
+                    <span class="pin-badge ${emp.wfhAllowed ? "success-badge" : ""}">
+                      ${emp.wfhAllowed ? "Allowed" : "Office only"}
                     </span>
                   </td>
                   <td class="employee-actions-cell">
                     ${emp.deviceStatus === "pending"
-                      ? `<button class="mini-approve approve-device-btn" data-employee-id="${escapeHtml(emp.id)}" type="button">Approve Laptop</button>
+                      ? `<button class="mini-approve approve-device-btn" data-employee-id="${escapeHtml(emp.id)}" type="button">Approve</button>
                     <button class="mini-danger reject-device-btn" data-employee-id="${escapeHtml(emp.id)}" type="button">Reject</button>`
                       : ""}
                     <button class="mini-secondary toggle-wfh-btn" data-employee-id="${escapeHtml(emp.id)}" data-wfh-allowed="${emp.wfhAllowed ? "false" : "true"}" type="button">
                       ${emp.wfhAllowed ? "Block WFH" : "Allow WFH"}
                     </button>
-                    <button class="mini-secondary reset-device-btn" data-employee-id="${escapeHtml(emp.id)}" type="button">Reset Laptop</button>
+                    ${emp.deviceStatus === "approved"
+                      ? `<button class="mini-secondary reset-device-btn" data-employee-id="${escapeHtml(emp.id)}" type="button">Reset laptop</button>`
+                      : ""}
                     <button class="mini-danger remove-employee-btn" data-employee-id="${escapeHtml(emp.id)}" type="button">Remove</button>
                   </td>
                 </tr>
@@ -690,17 +797,19 @@ const renderSummary = async () => {
       ? `${shift.start} - ${shift.end} (Grace ${Number(shift.graceMinutes || 0)} mins)`
       : "Shift rules not configured";
 
-    summaryStats.innerHTML = `
-      <strong>Month:</strong> ${escapeHtml(data.month)}
-      &nbsp; | &nbsp;<strong>Shift:</strong> ${escapeHtml(shiftText)}
-      &nbsp; | &nbsp;<strong>Employees:</strong> ${totalEmployees}
-      &nbsp; | &nbsp;<strong>Present days:</strong> ${totalPresentDays}
-      &nbsp; | &nbsp;<strong>WFO:</strong> ${totalWfoDays}
-      &nbsp; | &nbsp;<strong>WFH:</strong> ${totalWfhDays}
-      &nbsp; | &nbsp;<strong>Late days:</strong> ${lateDays}
-      &nbsp; | &nbsp;<strong>Overtime hrs:</strong> ${overtimeHours.toFixed(2)}
-      &nbsp; | &nbsp;<strong>Time Period:</strong> ${totalTimePeriod}
-    `;
+    const chip = (label, value, wide = false) =>
+      `<div class="chip-stat${wide ? " wide" : ""}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+    summaryStats.innerHTML = [
+      chip("Month", data.month),
+      chip("Shift", shiftText, true),
+      chip("Employees", totalEmployees),
+      chip("Present days", totalPresentDays),
+      chip("WFO", totalWfoDays),
+      chip("WFH", totalWfhDays),
+      chip("Late days", lateDays),
+      chip("Overtime hrs", overtimeHours.toFixed(2)),
+      chip("Total time", totalTimePeriod),
+    ].join("");
 
     if (!records.length) {
       summaryTable.innerHTML = "<p class='muted'>No monthly attendance found for the current filters.</p>";
@@ -918,14 +1027,13 @@ addEmployeeBtn.addEventListener("click", async () => {
     newEmployeeId.value = "";
     newEmployeeName.value = "";
     newEmployeeDepartment.value = "";
-    await renderEmployees();
-    await renderSummary();
+    await refreshAfterEmployeeChange();
   } catch (error) {
     setMessage(adminMsg, error.message);
   }
 });
 
-employeeList.addEventListener("click", async (event) => {
+const handleEmployeeAction = async (event) => {
   const resetButton = event.target.closest(".reset-device-btn");
   const toggleWfhButton = event.target.closest(".toggle-wfh-btn");
   const button = event.target.closest(".remove-employee-btn");
@@ -977,12 +1085,13 @@ employeeList.addEventListener("click", async (event) => {
       );
       setMessage(adminMsg, data.message, true);
     }
-    await renderEmployees();
-    await renderSummary();
+    await refreshAfterEmployeeChange();
   } catch (error) {
     setMessage(adminMsg, error.message);
   }
-});
+};
+employeeList.addEventListener("click", handleEmployeeAction);
+ovPendingList?.addEventListener("click", handleEmployeeAction);
 
 importEmployeesBtn.addEventListener("click", () => {
   if (!adminUnlocked || !adminToken) {
@@ -1015,8 +1124,7 @@ importEmployeesInput.addEventListener("change", async () => {
       true
     );
     importEmployeesInput.value = "";
-    await renderEmployees();
-    await renderSummary();
+    await refreshAfterEmployeeChange();
   } catch (error) {
     importEmployeesInput.value = "";
     setMessage(adminMsg, error.message);
@@ -1035,13 +1143,10 @@ unlockAdminBtn.addEventListener("click", async () => {
     unlockMsg.textContent = "";
     adminPanelModal.classList.remove("hidden");
     setMessage(adminMsg, data.message, true);
-    setAdminView("tools");
     summaryPage = 1;
     employeePage = 1;
-    await renderEmployees();
-    await renderSummary();
-    await loadOfficeSettings();
-    await loadReportSettings();
+    setAdminView("overview");
+    await loadDepartments();
   } catch (error) {
     setMessage(unlockMsg, error.message);
   }
@@ -1060,10 +1165,13 @@ employeePageSize?.addEventListener("change", async () => {
   await renderEmployees();
 });
 
-pendingOnlyToggle?.addEventListener("change", () => {
-  employeePage = 1;
-  renderEmployees().catch((error) => setMessage(adminMsg, error.message));
+pendingOnlyToggle?.addEventListener("change", applyEmployeeFilters);
+employeeDepartmentFilter?.addEventListener("change", applyEmployeeFilters);
+employeeSearchInput?.addEventListener("input", () => {
+  clearTimeout(employeeSearchTimer);
+  employeeSearchTimer = setTimeout(applyEmployeeFilters, 300);
 });
+refreshOverviewBtn?.addEventListener("click", () => renderOverview());
 
 const applyDeviceLogFilters = () => {
   deviceLogPage = 1;
@@ -1292,7 +1400,7 @@ adminTabBtn.addEventListener("click", () => {
   adminPanelModal.classList.remove("summary-mode", "tools-mode", "list-mode");
   adminModal.classList.remove("hidden");
   adminPasswordInput.focus();
-  setAdminView("tools");
+  setAdminView("overview");
 });
 
 closeAdminModalBtn.addEventListener("click", () => {
