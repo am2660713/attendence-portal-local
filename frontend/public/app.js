@@ -118,8 +118,12 @@ const callApi = async (path, method = "GET", body, extraHeaders = {}) => {
     headers: { "Content-Type": "application/json", ...extraHeaders },
     body: body ? JSON.stringify(body) : undefined,
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Request failed");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error = new Error(data.message || `Request failed (${res.status})`);
+    error.status = res.status;
+    throw error;
+  }
   return data;
 };
 
@@ -176,6 +180,23 @@ const refresh = async () => {
   await Promise.all([renderToday(), renderHistory()]);
 };
 
+// Sessions live in backend memory, so they end on expiry and on every backend restart.
+const endEmployeeSession = (message = "") => {
+  currentEmployee = null;
+  employeeToken = null;
+  localStorage.removeItem("attendanceEmployee");
+  localStorage.removeItem("attendanceEmployeeToken");
+  dashboardCard.classList.add("hidden");
+  loginCard.classList.remove("hidden");
+  workModeInputs.forEach((input) => {
+    input.checked = input.value === "WFO";
+  });
+  actionMsg.textContent = "";
+  if (message) setMessage(loginMsg, message);
+  else loginMsg.textContent = "";
+};
+const isEmployeeSessionError = (error) => error?.status === 401;
+
 const closeAdminPanels = (lock = true) => {
   if (lock) {
     adminUnlocked = false;
@@ -217,7 +238,7 @@ const setAdminView = (view) => {
     renderSummary();
   } else if (view === "list") {
     employeePage = 1;
-    renderEmployees();
+    renderEmployees().catch((error) => setMessage(adminMsg, error.message));
   } else if (view === "tools") {
     loadOfficeSettings();
     loadReportSettings();
@@ -372,7 +393,7 @@ const renderEmployees = async () => {
                     }</span>
                   </td>
                   <td>${escapeHtml(emp.deviceLabel || "—")}</td>
-                  <td>${emp.device_bound_at ? new Date(emp.device_bound_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—"}</td>
+                  <td>${emp.device_bound_at ? new Date(emp.device_bound_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }) : "—"}</td>
                   <td>
                     <span class="pin-badge ${emp.wfhAllowed ? "success-badge" : "warning-badge"}">
                       ${emp.wfhAllowed ? "WFH allowed" : "WFH blocked"}
@@ -447,8 +468,8 @@ const renderSummary = async () => {
       : "Shift rules not configured";
 
     summaryStats.innerHTML = `
-      <strong>Month:</strong> ${data.month}
-      &nbsp; | &nbsp;<strong>Shift:</strong> ${shiftText}
+      <strong>Month:</strong> ${escapeHtml(data.month)}
+      &nbsp; | &nbsp;<strong>Shift:</strong> ${escapeHtml(shiftText)}
       &nbsp; | &nbsp;<strong>Employees:</strong> ${totalEmployees}
       &nbsp; | &nbsp;<strong>Present days:</strong> ${totalPresentDays}
       &nbsp; | &nbsp;<strong>WFO:</strong> ${totalWfoDays}
@@ -611,15 +632,17 @@ loginBtn.addEventListener("click", async () => {
 
     loginCard.classList.add("hidden");
     dashboardCard.classList.remove("hidden");
+    setMessage(actionMsg, message || "Login successful", true);
 
     await refresh();
-    setMessage(loginMsg, message || "Login successful", true);
   } catch (error) {
-    setMessage(loginMsg, error.message);
+    setMessage(currentEmployee ? actionMsg : loginMsg, error.message);
   }
 });
 
 const markAttendance = async (path) => {
+  checkInBtn.disabled = true;
+  checkOutBtn.disabled = true;
   try {
     setMessage(actionMsg, "Reading location...", true);
     const coords = await getLocation();
@@ -638,7 +661,14 @@ const markAttendance = async (path) => {
     setMessage(actionMsg, data.message, true);
     await refresh();
   } catch (error) {
+    if (isEmployeeSessionError(error)) {
+      endEmployeeSession("Your session has expired. Please log in again.");
+      return;
+    }
     setMessage(actionMsg, error.message);
+  } finally {
+    checkInBtn.disabled = false;
+    checkOutBtn.disabled = false;
   }
 };
 
@@ -646,17 +676,8 @@ checkInBtn.addEventListener("click", () => markAttendance("/attendance/check-in"
 checkOutBtn.addEventListener("click", () => markAttendance("/attendance/check-out"));
 
 logoutBtn.addEventListener("click", () => {
-  currentEmployee = null;
-  employeeToken = null;
-  localStorage.removeItem("attendanceEmployee");
-  localStorage.removeItem("attendanceEmployeeToken");
-  dashboardCard.classList.add("hidden");
-  loginCard.classList.remove("hidden");
+  endEmployeeSession();
   employeeIdInput.value = "";
-  workModeInputs.forEach((input) => {
-    input.checked = input.value === "WFO";
-  });
-  actionMsg.textContent = "";
 });
 
 addEmployeeBtn.addEventListener("click", async () => {
@@ -793,7 +814,7 @@ loadSummaryBtn.addEventListener("click", async () => {
 });
 
 summaryPageSize?.addEventListener("change", async () => {
-  await renderSummary();
+  await applySummaryFilters();
 });
 
 employeePageSize?.addEventListener("change", async () => {
@@ -853,9 +874,10 @@ saveOfficeLocationBtn?.addEventListener("click", async () => {
     if (!adminUnlocked || !adminToken) throw new Error("Unlock admin first.");
 
     const name = officeNameInput.value.trim();
-    const latitude = Number(officeLatitudeInput.value);
-    const longitude = Number(officeLongitudeInput.value);
-    const radiusMeters = Number(officeRadiusInput.value);
+    const toNumber = (input) => (input.value.trim() === "" ? NaN : Number(input.value));
+    const latitude = toNumber(officeLatitudeInput);
+    const longitude = toNumber(officeLongitudeInput);
+    const radiusMeters = toNumber(officeRadiusInput);
     const allowedIps = officeAllowedIpsInput.value
       .split(/[\n,]+/)
       .map((value) => value.trim())
@@ -971,15 +993,16 @@ exportAttendanceBtn.addEventListener("click", async () => {
     });
 
     if (!res.ok) {
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       throw new Error(data.message || "Export failed");
     }
 
     const blob = await res.blob();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
+    const filenameMatch = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") || "");
     a.href = url;
-    a.download = "attendance-export.csv";
+    a.download = filenameMatch?.[1] || "attendance-export.csv";
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -1043,10 +1066,13 @@ const bootstrap = async () => {
     loginCard.classList.add("hidden");
     dashboardCard.classList.remove("hidden");
     await refresh();
-  } catch {
-    employeeToken = null;
-    localStorage.removeItem("attendanceEmployee");
-    localStorage.removeItem("attendanceEmployeeToken");
+  } catch (error) {
+    if (isEmployeeSessionError(error) || !currentEmployee?.id) {
+      endEmployeeSession("Your session has expired. Please log in again.");
+      return;
+    }
+    // Keep the session on network/server errors so a brief outage does not log people out.
+    setMessage(actionMsg, error.message);
   }
 };
 
