@@ -101,8 +101,52 @@ const getDeviceToken = () => {
   return token;
 };
 const getDeviceLabel = () => {
-  const parts = [navigator.platform || "Unknown device", navigator.userAgent || "Browser"];
-  return parts.filter(Boolean).join(" / ").slice(0, 255);
+  const ua = navigator.userAgent || "";
+  const os = /Windows/i.test(ua) ? "Windows"
+    : /iPhone|iPad/i.test(ua) ? "iOS"
+    : /Android/i.test(ua) ? "Android"
+    : /Mac OS X/i.test(ua) ? "macOS"
+    : /Linux/i.test(ua) ? "Linux"
+    : navigator.platform || "Unknown device";
+  const browsers = [
+    ["Edge", /Edg\/(\d+)/],
+    ["Opera", /OPR\/(\d+)/],
+    ["Firefox", /Firefox\/(\d+)/],
+    ["Chrome", /Chrome\/(\d+)/],
+    ["Safari", /Version\/(\d+).*Safari/],
+  ];
+  const match = browsers.map(([name, pattern]) => [name, pattern.exec(ua)]).find(([, found]) => found);
+  const browser = match ? `${match[0]} ${match[1][1]}` : "Browser";
+  return `${os} · ${browser}`.slice(0, 255);
+};
+// Hardware details that every browser on the same laptop reports alike, so the server can tell
+// that Chrome is the same laptop HR approved in Edge. Each browser's device token stays separate.
+const getDeviceFingerprint = () => {
+  let gpu = "";
+  let gpuVendor = "";
+  try {
+    const gl = document.createElement("canvas").getContext("webgl");
+    const info = gl?.getExtension("WEBGL_debug_renderer_info");
+    if (gl && info) {
+      gpu = gl.getParameter(info.UNMASKED_RENDERER_WEBGL) || "";
+      gpuVendor = gl.getParameter(info.UNMASKED_VENDOR_WEBGL) || "";
+    } else if (gl) {
+      gpu = gl.getParameter(gl.RENDERER) || "";
+      gpuVendor = gl.getParameter(gl.VENDOR) || "";
+    }
+  } catch {
+    // WebGL disabled: the server then falls back to the per-browser device token only.
+  }
+  return {
+    gpu,
+    gpuVendor,
+    cores: navigator.hardwareConcurrency || 0,
+    platform: navigator.platform || "",
+    // Zone names differ between browsers (Asia/Calcutta vs Asia/Kolkata); a fixed-date offset does not.
+    tzOffset: new Date(2024, 0, 1).getTimezoneOffset(),
+    colorDepth: window.screen?.colorDepth || 0,
+    touchPoints: navigator.maxTouchPoints || 0,
+  };
 };
 const getISTMonthValue = () =>
   new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }).slice(0, 7);
@@ -360,6 +404,7 @@ const renderLaptopStatus = (emp) => {
 const DEVICE_EVENT_LABELS = {
   login: ["Login", "success-badge"],
   approval_requested: ["Approval requested", "pending-badge"],
+  browser_linked: ["Another browser linked", "success-badge"],
   approved: ["Approved", "success-badge"],
   rejected: ["Rejected", "warning-badge"],
   blocked_other_laptop: ["Blocked: other laptop", "warning-badge"],
@@ -484,7 +529,10 @@ const renderEmployees = async () => {
                   </td>
                   <td>${escapeHtml(emp.department)}</td>
                   <td>${renderLaptopStatus(emp)}</td>
-                  <td>${escapeHtml(emp.deviceLabel || "—")}</td>
+                  <td>
+                    ${escapeHtml(emp.deviceLabel || "—")}
+                    ${emp.linkedBrowsers ? `<span class="employee-subtext">+ ${emp.linkedBrowsers} more browser${emp.linkedBrowsers === 1 ? "" : "s"} on this laptop</span>` : ""}
+                  </td>
                   <td>${emp.device_bound_at ? new Date(emp.device_bound_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }) : "—"}</td>
                   <td>
                     <span class="pin-badge ${emp.wfhAllowed ? "success-badge" : "warning-badge"}">
@@ -717,6 +765,7 @@ loginBtn.addEventListener("click", async () => {
       workMode,
       deviceToken: getDeviceToken(),
       deviceLabel: getDeviceLabel(),
+      deviceFingerprint: getDeviceFingerprint(),
     });
     currentEmployee = employee;
     employeeToken = token;

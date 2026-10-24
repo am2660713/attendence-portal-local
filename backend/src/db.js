@@ -80,6 +80,25 @@ export const initDb = async () => {
     WHERE device_token IS NOT NULL AND device_status IS NULL;
   `);
 
+  // Hash of hardware details every browser on the laptop reports the same way, so Chrome can be
+  // recognised as the same laptop as Edge even though each browser keeps its own device token.
+  await query(`
+    ALTER TABLE employees
+    ADD COLUMN IF NOT EXISTS device_fingerprint TEXT;
+  `);
+
+  // Extra browsers on the employee's laptop, linked automatically by device_fingerprint.
+  await query(`
+    CREATE TABLE IF NOT EXISTS employee_browsers (
+      id BIGSERIAL PRIMARY KEY,
+      employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+      device_token TEXT NOT NULL,
+      device_label TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(employee_id, device_token)
+    );
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS device_events (
       id BIGSERIAL PRIMARY KEY,

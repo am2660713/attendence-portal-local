@@ -630,6 +630,7 @@ const buildDailyMetrics = (row, config) => {
 const DEVICE_EVENT_TYPES = new Set([
   "login",
   "approval_requested",
+  "browser_linked",
   "blocked_pending",
   "blocked_other_laptop",
   "approved",
@@ -637,6 +638,24 @@ const DEVICE_EVENT_TYPES = new Set([
   "reset",
   "removed",
 ]);
+// Only details Edge, Chrome and Firefox report identically on one laptop. Screen size is left out because it
+// changes with external monitors. Without a graphics chip name the rest is too generic to identify a laptop.
+const hashDeviceFingerprint = (raw) => {
+  if (!raw || typeof raw !== "object") return null;
+  const clean = (value) => String(value ?? "").trim().toLowerCase().slice(0, 300);
+  const parts = {
+    gpu: clean(raw.gpu),
+    gpuVendor: clean(raw.gpuVendor),
+    cores: clean(raw.cores),
+    platform: clean(raw.platform),
+    tzOffset: clean(raw.tzOffset),
+    colorDepth: clean(raw.colorDepth),
+    touchPoints: clean(raw.touchPoints),
+  };
+  if (!parts.gpu) return null;
+  return crypto.createHash("sha256").update(JSON.stringify(parts)).digest("hex");
+};
+
 const logDeviceEvent = (employeeId, eventType, { deviceLabel = null, ip = null } = {}) =>
   query(
     `INSERT INTO device_events (employee_id, event_type, device_label, ip)
@@ -766,12 +785,14 @@ const server = http.createServer(async (req, res) => {
       const rawInput = String(body.employeeId || "").trim().toUpperCase();
       const deviceToken = String(body.deviceToken || "").trim();
       const deviceLabel = String(body.deviceLabel || "").trim().slice(0, 255);
+      const fingerprint = hashDeviceFingerprint(body.deviceFingerprint);
       const workMode = normalizeWorkMode(body.workMode);
       if (!rawInput) return sendJson(res, 400, { message: "Employee ID is required." }, corsOrigin);
       if (!deviceToken) return sendJson(res, 400, { message: "Device information is required." }, corsOrigin);
 
       const dbRes = await query(
-        "SELECT id, name, department, device_token, device_label, device_status, wfh_allowed FROM employees WHERE active = true AND id = $1",
+        `SELECT id, name, department, device_token, device_label, device_status, device_fingerprint, wfh_allowed
+         FROM employees WHERE active = true AND id = $1`,
         [rawInput]
       );
       const employee = dbRes.rows[0];
@@ -783,12 +804,34 @@ const server = http.createServer(async (req, res) => {
       const deviceEvent = { deviceLabel: deviceLabel || "Unknown laptop", ip: getRequestIp(req) };
       const lockedMessage = "This employee is locked to another company laptop.";
 
-      if (employee.device_token && employee.device_token !== deviceToken) {
-        await logDeviceEvent(employee.id, "blocked_other_laptop", deviceEvent);
-        const message = employee.device_status === "pending"
-          ? "Another laptop is already waiting for HR approval for this employee ID. Please contact HR."
-          : lockedMessage;
-        return sendJson(res, 403, { message }, corsOrigin);
+      const isPrimaryBrowser = Boolean(employee.device_token) && employee.device_token === deviceToken;
+      let isKnownBrowser = isPrimaryBrowser;
+      if (employee.device_token && !isPrimaryBrowser) {
+        const linkedRes = await query(
+          "SELECT 1 FROM employee_browsers WHERE employee_id = $1 AND device_token = $2",
+          [employee.id, deviceToken]
+        );
+        isKnownBrowser = Boolean(linkedRes.rows[0]);
+      }
+
+      if (employee.device_token && !isKnownBrowser) {
+        // Each browser keeps its own device token, so Chrome on the bound laptop looks new.
+        // Recognise it by the laptop's hardware details and link it to the same approval.
+        if (fingerprint && employee.device_fingerprint === fingerprint) {
+          await query(
+            `INSERT INTO employee_browsers (employee_id, device_token, device_label)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (employee_id, device_token) DO NOTHING`,
+            [employee.id, deviceToken, deviceEvent.deviceLabel]
+          );
+          await logDeviceEvent(employee.id, "browser_linked", deviceEvent);
+        } else {
+          await logDeviceEvent(employee.id, "blocked_other_laptop", deviceEvent);
+          const message = employee.device_status === "pending"
+            ? "Another laptop is already waiting for HR approval for this employee ID. Please contact HR."
+            : lockedMessage;
+          return sendJson(res, 403, { message }, corsOrigin);
+        }
       }
 
       if (!employee.device_token) {
@@ -797,11 +840,12 @@ const server = http.createServer(async (req, res) => {
           `UPDATE employees
            SET device_token = $2,
                device_label = $3,
+               device_fingerprint = $4,
                device_status = 'pending',
                device_bound_at = NOW()
            WHERE id = $1 AND device_token IS NULL
            RETURNING id`,
-          [employee.id, deviceToken, deviceEvent.deviceLabel]
+          [employee.id, deviceToken, deviceEvent.deviceLabel, fingerprint]
         );
         if (!bindRes.rows[0]) {
           await logDeviceEvent(employee.id, "blocked_other_laptop", deviceEvent);
@@ -824,6 +868,12 @@ const server = http.createServer(async (req, res) => {
           { message: "This laptop is still waiting for HR approval.", code: "DEVICE_PENDING" },
           corsOrigin
         );
+      }
+
+      // The first approved browser is the anchor: keep its hardware details current (laptops approved
+      // before fingerprints existed get one here, and driver updates do not strand linked browsers).
+      if (isPrimaryBrowser && fingerprint && employee.device_fingerprint !== fingerprint) {
+        await query("UPDATE employees SET device_fingerprint = $2 WHERE id = $1", [employee.id, fingerprint]);
       }
 
       await logDeviceEvent(employee.id, "login", deviceEvent);
@@ -957,7 +1007,8 @@ const server = http.createServer(async (req, res) => {
       ]);
       const total = countRes.rows[0].count;
       const employeeQueryParams = [...params];
-      let employeeQueryText = `SELECT id, name, department, device_token, device_label, device_status, device_bound_at, wfh_allowed
+      let employeeQueryText = `SELECT id, name, department, device_token, device_label, device_status, device_bound_at, wfh_allowed,
+           (SELECT COUNT(*)::int FROM employee_browsers b WHERE b.employee_id = employees.id) AS linked_browsers
          FROM employees
          WHERE ${whereClause}
          ORDER BY id`;
@@ -974,8 +1025,9 @@ const server = http.createServer(async (req, res) => {
         200,
         {
           // The device token is the laptop's secret; the admin UI only needs to know whether one exists.
-          employees: dbRes.rows.map(({ device_token: deviceToken, ...employee }) => ({
+          employees: dbRes.rows.map(({ device_token: deviceToken, linked_browsers: linkedBrowsers, ...employee }) => ({
             ...employee,
+            linkedBrowsers: Number(linkedBrowsers || 0),
             deviceBound: Boolean(deviceToken),
             deviceStatus: deviceToken ? employee.device_status || "approved" : "none",
             deviceLabel: employee.device_label || "",
@@ -1047,10 +1099,12 @@ const server = http.createServer(async (req, res) => {
 
       await query(
         `UPDATE employees
-         SET active = false, device_token = NULL, device_label = NULL, device_status = NULL, device_bound_at = NULL
+         SET active = false, device_token = NULL, device_label = NULL, device_status = NULL,
+             device_fingerprint = NULL, device_bound_at = NULL
          WHERE id = $1`,
         [id]
       );
+      await query("DELETE FROM employee_browsers WHERE employee_id = $1", [id]);
       await logDeviceEvent(id, "removed", { deviceLabel: exists.rows[0].device_label, ip: getRequestIp(req) });
       sendJson(res, 200, { message: "Employee removed successfully." }, corsOrigin);
       return;
@@ -1072,9 +1126,12 @@ const server = http.createServer(async (req, res) => {
       }
 
       await query(
-        "UPDATE employees SET device_token = NULL, device_label = NULL, device_status = NULL, device_bound_at = NULL WHERE id = $1",
+        `UPDATE employees
+         SET device_token = NULL, device_label = NULL, device_status = NULL, device_fingerprint = NULL, device_bound_at = NULL
+         WHERE id = $1`,
         [id]
       );
+      await query("DELETE FROM employee_browsers WHERE employee_id = $1", [id]);
       await logDeviceEvent(id, "reset", { deviceLabel: exists.rows[0].device_label, ip: getRequestIp(req) });
       sendJson(res, 200, { message: "Company laptop binding reset successfully." }, corsOrigin);
       return;
@@ -1096,7 +1153,8 @@ const server = http.createServer(async (req, res) => {
           ? `UPDATE employees SET device_status = 'approved', device_bound_at = NOW()
              WHERE id = $1 AND active = true AND device_status = 'pending'
              RETURNING id, device_label`
-          : `UPDATE employees e SET device_token = NULL, device_label = NULL, device_status = NULL, device_bound_at = NULL
+          : `UPDATE employees e
+             SET device_token = NULL, device_label = NULL, device_status = NULL, device_fingerprint = NULL, device_bound_at = NULL
              FROM (SELECT id, device_label FROM employees WHERE id = $1) old
              WHERE e.id = old.id AND e.active = true AND e.device_status = 'pending'
              RETURNING e.id, old.device_label`,
@@ -1106,6 +1164,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 404, { message: "No pending laptop request for this employee." }, corsOrigin);
         return;
       }
+      if (!isApprove) await query("DELETE FROM employee_browsers WHERE employee_id = $1", [id]);
 
       await logDeviceEvent(id, isApprove ? "approved" : "rejected", {
         deviceLabel: updateRes.rows[0].device_label,
@@ -1517,11 +1576,15 @@ const server = http.createServer(async (req, res) => {
       }
 
       const empRes = await query(
-        "SELECT id, device_token, device_status, wfh_allowed FROM employees WHERE id = $1 AND active = true",
-        [employeeId]
+        `SELECT id, device_status, wfh_allowed,
+                (device_token = $2 OR EXISTS (
+                  SELECT 1 FROM employee_browsers b WHERE b.employee_id = employees.id AND b.device_token = $2
+                )) AS device_ok
+         FROM employees WHERE id = $1 AND active = true`,
+        [employeeId, employeeSession.deviceToken]
       );
       if (!empRes.rows[0]) return sendJson(res, 404, { message: "Employee not found." }, corsOrigin);
-      if (empRes.rows[0].device_token !== employeeSession.deviceToken || empRes.rows[0].device_status !== "approved") {
+      if (!empRes.rows[0].device_ok || empRes.rows[0].device_status !== "approved") {
         return sendJson(res, 403, { message: "Company laptop verification failed." }, corsOrigin);
       }
       if (isCheckIn && sessionWorkMode === "WFH" && !empRes.rows[0].wfh_allowed) {
