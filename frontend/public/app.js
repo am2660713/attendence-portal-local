@@ -256,10 +256,38 @@ const showEmployee = (employee) => {
     .map((part) => part[0].toUpperCase())
     .join("");
 };
+// Attendance is stamped with the server's time, so the header clock follows the server too
+// instead of a laptop clock that may be minutes off.
+let serverClockOffsetMs = 0;
+const syncServerClock = async () => {
+  try {
+    const sentAt = Date.now();
+    const data = await callApi("/health");
+    const receivedAt = Date.now();
+    if (Number.isFinite(data.serverTime)) {
+      serverClockOffsetMs = data.serverTime - Math.round((sentAt + receivedAt) / 2);
+    }
+  } catch {
+    // Offline or backend restarting: keep the last offset and try again on the next sync.
+  }
+};
 const updateClock = () => {
-  const now = new Date();
-  liveClock.textContent = now.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
+  const now = new Date(Date.now() + serverClockOffsetMs);
+  liveClock.textContent = now.toLocaleTimeString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
   liveDate.textContent = now.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short" });
+};
+// Tick on each second boundary so the seconds change in step with real time.
+const startClock = () => {
+  updateClock();
+  setTimeout(() => {
+    updateClock();
+    setInterval(updateClock, 1000);
+  }, 1000 - ((Date.now() + serverClockOffsetMs) % 1000));
 };
 
 const renderToday = async () => {
@@ -1451,8 +1479,9 @@ const bootstrap = async () => {
   }
 };
 
-updateClock();
-setInterval(updateClock, 15 * 1000);
+startClock();
+syncServerClock().then(updateClock);
+setInterval(syncServerClock, 5 * 60 * 1000);
 bootstrap();
 applyAdminVisibility();
 window.addEventListener("pageshow", applyAdminVisibility);

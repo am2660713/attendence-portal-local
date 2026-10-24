@@ -1887,3 +1887,16 @@ select:focus {
 }
 
 #adminPanelModal .compact-table .employee-actions-cell button { margin: 0; }
+
+/* Keep the ticking clock and brand on one line each on narrow phones. */
+.clock strong { white-space: nowrap; }
+.brand > div { min-width: 0; }
+.brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 420px) {
+  .topbar { gap: 10px; padding: 10px 12px; }
+  .brand { gap: 10px; }
+  .brand-name { font-size: 10px; letter-spacing: 0.08em; }
+  .brand-sub { font-size: 15px; }
+  .clock strong { font-size: 15px; }
+}

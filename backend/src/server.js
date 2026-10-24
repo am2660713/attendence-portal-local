@@ -708,7 +708,7 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://localhost");
 
     if (req.method === "GET" && url.pathname === "/api/health") {
-      sendJson(res, 200, { ok: true, message: "Attendance backend is running" }, corsOrigin);
+      sendJson(res, 200, { ok: true, message: "Attendance backend is running", serverTime: Date.now() }, corsOrigin);
       return;
     }
 
