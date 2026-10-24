@@ -15,7 +15,7 @@ Create or use a local PostgreSQL server with these defaults:
 - User: postgres
 - Password: postgres
 
-If your local PostgreSQL uses different values, update `backend/.env`.
+Copy `backend/.env.example` to `backend/.env`. If your local PostgreSQL uses different values, update `backend/.env`.
 
 ## 2. Install dependencies
 From this folder run:
@@ -34,6 +34,8 @@ Run:
 ## 5. Start the app
 Run:
 - `npm run dev`
+
+This starts the backend and frontend together in one terminal; output is prefixed `[backend]` / `[frontend]`. The backend listens on `BACKEND_PORT` (4000), so a `PORT` set in your shell only affects the frontend.
 
 ## Cloudflare tunnel
 For mobile testing without deployment, you only need one tunnel for the frontend because `/api` is proxied to the local backend.

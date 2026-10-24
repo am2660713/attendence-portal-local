@@ -248,7 +248,7 @@ const getAttendanceSeconds = (row) => {
 };
 
 const getMonthBounds = (month) => {
-  const safeMonth = /^\d{4}-\d{2}$/.test(month) ? month : getISTMonth();
+  const safeMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? month : getISTMonth();
   const start = new Date(`${safeMonth}-01T00:00:00+05:30`).getTime();
   const [year, monthPart] = safeMonth.split("-").map(Number);
   const nextMonthStart = monthPart === 12
@@ -768,14 +768,19 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (!employee.device_token) {
-        await query(
+        // Only bind if still unbound, so two laptops logging in at once cannot both claim the employee.
+        const bindRes = await query(
           `UPDATE employees
            SET device_token = $2,
                device_label = $3,
                device_bound_at = NOW()
-           WHERE id = $1`,
+           WHERE id = $1 AND (device_token IS NULL OR device_token = $2)
+           RETURNING id`,
           [employee.id, deviceToken, deviceLabel || "Approved company laptop"]
         );
+        if (!bindRes.rows[0]) {
+          return sendJson(res, 403, { message: "This employee is locked to another company laptop." }, corsOrigin);
+        }
       }
 
       const token = crypto.randomUUID();
@@ -948,6 +953,10 @@ const server = http.createServer(async (req, res) => {
       }
 
       const exists = await query("SELECT id, active, device_token, device_label, device_bound_at FROM employees WHERE id = $1", [id]);
+      if (exists.rows[0]?.active) {
+        sendJson(res, 409, { message: `Employee ${id} already exists.` }, corsOrigin);
+        return;
+      }
 
       const insertRes = await query(
         `INSERT INTO employees (id, name, department, active, device_token, device_label, device_bound_at)
@@ -1046,9 +1055,11 @@ const server = http.createServer(async (req, res) => {
 
       const body = await parseBody(req);
       const name = String(body.name || "").trim();
-      const latitude = Number(body.latitude);
-      const longitude = Number(body.longitude);
-      const radiusMeters = Number(body.radiusMeters);
+      // Number("") is 0, so blank fields would silently move the office to 0,0.
+      const toNumber = (value) => (value === "" || value === null || value === undefined ? NaN : Number(value));
+      const latitude = toNumber(body.latitude);
+      const longitude = toNumber(body.longitude);
+      const radiusMeters = toNumber(body.radiusMeters);
       const allowedIps = Array.isArray(body.allowedIps)
         ? body.allowedIps.map((item) => normalizeIp(item)).filter(Boolean)
         : parseIpList(body.allowedIps);
@@ -1059,6 +1070,10 @@ const server = http.createServer(async (req, res) => {
       }
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !Number.isFinite(radiusMeters)) {
         sendJson(res, 400, { message: "Valid latitude, longitude, and radius are required." }, corsOrigin);
+        return;
+      }
+      if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+        sendJson(res, 400, { message: "Latitude must be between -90 and 90, longitude between -180 and 180." }, corsOrigin);
         return;
       }
       if (radiusMeters < 10 || radiusMeters > 5000) {
@@ -1288,7 +1303,10 @@ const server = http.createServer(async (req, res) => {
       });
 
       const total = filteredRecords.length;
-      const records = filteredRecords;
+      const { page: requestedPage, pageSize } = getPagination(url, 10);
+      const totalPages = pageSize ? Math.max(1, Math.ceil(total / pageSize)) : 1;
+      const { records, page } = paginateItems(filteredRecords, Math.min(requestedPage, totalPages), pageSize);
+      // Totals cover every filtered employee, not just the current page.
       const totals = filteredRecords.reduce(
         (acc, item) => {
           acc.daysPresent += Number(item.daysPresent || 0);
@@ -1310,10 +1328,10 @@ const server = http.createServer(async (req, res) => {
           month: safeMonth,
           shift: config.shift || null,
           records,
-          page: 1,
-          pageSize: records.length,
+          page,
+          pageSize: pageSize || records.length,
           total,
-          totalPages: 1,
+          totalPages,
           stats: {
             employees: total,
             presentDays: totals.daysPresent,
@@ -1478,7 +1496,8 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-const PORT = Number(process.env.PORT || 4000);
+// BACKEND_PORT wins locally so a PORT meant for the frontend (e.g. from a dev runner) cannot clash; Render sets PORT.
+const PORT = Number(process.env.BACKEND_PORT || process.env.PORT || 4000);
 
 const sweepExpiredSessions = () => {
   const now = Date.now();
